@@ -445,7 +445,8 @@
   $('furniturePalette').addEventListener('click',e=>{
     const b=e.target.closest('[data-furniture],[data-prefab-id]');if(!b)return;
     setMode('2d');setTool('furniture',b.dataset.furniture||'prefab:'+b.dataset.prefabId);
-    if(['stairs','elevator'].includes(b.dataset.furniture))toast('Place on the lower floor to connect toward the level above');
+    if(b.dataset.furniture==='stairs')toast('Stairs open the next floor above');
+    if(b.dataset.furniture==='elevator')toast('Elevator connects all floors above by default');
   });
   $('mobileMoreBtn').addEventListener('click',()=>{
     const p=document.querySelector('.tools-panel'),on=!p.classList.contains('show-more');
@@ -475,7 +476,13 @@
   $('traceBelowBtn').addEventListener('click',()=>{
     const i=activeFloorIndex();if(i<=0)return;
     const existing=floor().items,lower=project.floors[i-1].items;
-    const same=(a,b)=>a.type===b.type&&(a.type==='room'?['x','y','w','h'].every(k=>Math.abs(a[k]-b[k])<.01):['x1','y1','x2','y2'].every(k=>Math.abs(a[k]-b[k])<.01));
+    const same=(a,b)=>{
+      if(a.type!==b.type)return false;
+      if(a.type==='room')return ['x','y','w','h'].every(k=>Math.abs(a[k]-b[k])<.01);
+      const forward=['x1','y1','x2','y2'].every(k=>Math.abs(a[k]-b[k])<.01);
+      const reverse=Math.abs(a.x1-b.x2)<.01&&Math.abs(a.y1-b.y2)<.01&&Math.abs(a.x2-b.x1)<.01&&Math.abs(a.y2-b.y1)<.01;
+      return forward||reverse;
+    };
     const copied=lower.filter(e=>e.type==='room'||e.type==='wall').filter(e=>!existing.some(v=>same(e,v))).map(e=>({...clone(e),id:id()}));
     if(!copied.length){toast('All lower-floor rooms are already traced');return}
     const before=state();floor().items.push(...copied);selected=null;changed(before);
@@ -593,10 +600,13 @@
       return {x:rx,y:-ry*sPhi-(z-upper*.45)*cPhi,depth:ry*cPhi-(z-upper*.45)*sPhi};
     };
     const bounds=[];
-    for(const z of [0,upper+10])for(const x of [ext.minX-3,ext.maxX+3])for(const y of [ext.minY-3,ext.maxY+3])bounds.push(transform(x,y,z));
+    // Fit to the actual highest walls, not an empty imaginary story above the
+    // building. This uses more of a phone's limited 3D viewing area.
+    const highestWall=(showAll?(project.floors.length-1)*floorSpacing:0)+8;
+    for(const z of [-1,highestWall+2])for(const x of [ext.minX-3,ext.maxX+3])for(const y of [ext.minY-3,ext.maxY+3])bounds.push(transform(x,y,z));
     const bw=Math.max(...bounds.map(p=>p.x))-Math.min(...bounds.map(p=>p.x));
     const bh=Math.max(...bounds.map(p=>p.y))-Math.min(...bounds.map(p=>p.y));
-    const scale=Math.min(cw*.76/Math.max(15,bw),ch*.70/Math.max(18,bh))*orbit.zoom;
+    const scale=Math.min(cw*.87/Math.max(15,bw),ch*.80/Math.max(18,bh))*orbit.zoom;
     const xcenter=(Math.max(...bounds.map(p=>p.x))+Math.min(...bounds.map(p=>p.x)))/2;
     const ycenter=(Math.max(...bounds.map(p=>p.y))+Math.min(...bounds.map(p=>p.y)))/2;
     const projectP=(x,y,z)=>{const p=transform(x,y,z);return {x:cw/2+(p.x-xcenter)*scale,y:ch/2+(p.y-ycenter)*scale,depth:p.depth}};

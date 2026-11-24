@@ -109,6 +109,7 @@
     font-size: 10px; max-width: calc(100% - 40px);
     overflow: hidden; text-overflow: ellipsis;
   }
+  .floor-guides:not(.hidden) ~ .canvas-hint { display:none !important; }
   .scale-key { left: 12px; bottom: 16px; font-size: 10px; }
   .zoom-controls { right: 9px; bottom: 9px; gap: 2px; padding: 3px; }
   .zoom-controls button { width: 37px; height: 38px; font-size: 23px; }
