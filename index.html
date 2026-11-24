@@ -12,7 +12,7 @@
   <meta name="description" content="Create and edit beautiful, measurable home floor plans in your browser.">
   <title>HousePlan Studio — Floor Plan Editor</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="mobile.css?v=vertical1">
+  <link rel="stylesheet" href="mobile.css?v=update1">
 </head>
 <body>
   <div class="app-shell">
@@ -27,10 +27,10 @@
         <button id="redoBtn" class="icon-btn" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
         <span class="action-divider"></span>
         <button id="newBtn" class="subtle-btn"><span class="icon-text">＋</span><span class="desktop-text">New</span></button>
-        <button id="importBtn" class="subtle-btn"><span class="icon-text">↥</span><span class="desktop-text">Open</span></button>
+        <button id="projectsBtn" class="subtle-btn"><span class="icon-text">▦</span><span class="desktop-text">Projects</span></button>
         <button id="projectMenuBtn" class="mobile-only mobile-menu-btn" aria-label="Project menu" aria-expanded="false">⋯</button>
         <button id="exportBtn" class="primary-btn">Export <span class="chevron">⌄</span></button>
-        <div id="projectMenu" class="export-menu hidden" role="menu"><button data-project-action="new">＋ New project</button><button data-project-action="open">↥ Open saved project</button><button data-project-action="overview">☷ Project overview</button></div>
+        <div id="projectMenu" class="export-menu hidden" role="menu"><button data-project-action="library">▦ My projects</button><button data-project-action="new">＋ New project</button><button data-project-action="import">↥ Import project file</button><button data-project-action="overview">☷ Project overview</button></div>
         <div id="exportMenu" class="export-menu hidden" role="menu">
           <button data-export="png">Image <small>PNG</small></button>
           <button data-export="svg">Vector drawing <small>SVG</small></button>
@@ -73,7 +73,7 @@
       </aside>
 
       <section class="editor-area" aria-label="Floor plan canvas">
-        <div class="editor-toolbar"><div class="breadcrumb"><span class="breadcrumb-circle"></span> <span id="floorBreadcrumb">GROUND FLOOR</span> <span class="breadcrumb-slash">/</span> <strong id="modeBreadcrumb">2D FLOOR PLAN</strong></div><div class="editor-toolbar-right"><span class="unit-pill">FT · FEET</span><label class="snap-control" id="snapLabel"><input type="checkbox" id="snapCheck" checked><span class="snap-mark">✓</span> Snap to grid</label></div></div>
+        <div class="editor-toolbar"><div class="breadcrumb"><span class="breadcrumb-circle"></span> <span id="floorBreadcrumb">GROUND FLOOR</span> <span class="breadcrumb-slash">/</span> <strong id="modeBreadcrumb">2D FLOOR PLAN</strong></div><div class="editor-toolbar-right"><span class="unit-pill">FT · FEET</span><button id="magnetToggle" class="magnet-toggle active" aria-pressed="true" title="Snap to nearby wall edges and corners">⊞ <span>Align</span></button><label class="snap-control" id="snapLabel"><input type="checkbox" id="snapCheck" checked><span class="snap-mark">✓</span> Snap to grid</label></div></div>
         <div class="floorbar"><div class="floor-tabs" id="floorTabs" role="tablist" aria-label="Project floors"></div><button class="floor-add" id="addFloorBtn" title="Add new floor">＋ Floor</button><div class="view-modes" role="group" aria-label="View mode"><button id="mode2D" class="active">▦ 2D plan</button><button id="mode3D">⬡ 3D building</button></div></div>
         <div class="canvas-stage" id="stage">
           <svg id="plan" xmlns="http://www.w3.org/2000/svg" aria-label="Interactive architectural floor plan" role="img" tabindex="0">
@@ -83,9 +83,10 @@
             </defs>
             <rect x="-3000" y="-3000" width="6000" height="6000" fill="#fbfcfa" />
             <rect x="-3000" y="-3000" width="6000" height="6000" fill="url(#largeGrid)" id="gridLayer"/>
-            <g id="drawing"></g><g id="underlayLayer" pointer-events="none"></g><g id="tempDrawing"></g><g id="interactionLayer"></g>
+            <g id="drawing"></g><g id="underlayLayer" pointer-events="none"></g><g id="tempDrawing"></g><g id="snapGuideLayer" pointer-events="none"></g><g id="interactionLayer"></g>
           </svg>
           <button id="underlayToggle" class="underlay-toggle hidden" type="button" aria-pressed="true" title="Show the outline of the floor immediately below">▧ <span id="underlayText">Floor below: On</span></button>
+          <div id="selectionToolbar" class="selection-toolbar hidden" role="toolbar" aria-label="Selected object actions"><button id="quickEdit" title="Edit dimensions">✎ <span>Edit</span></button><button id="quickDuplicate" title="Duplicate selected item">▣ <span>Copy</span></button><button id="quickRotate" title="Rotate object 90 degrees">↻ <span>Rotate</span></button><button id="quickDelete" class="danger" title="Delete selected item">× <span>Delete</span></button></div>
           <div class="canvas-hint" id="canvasHint">Click an object to edit its dimensions</div>
           <div class="zoom-controls"><button id="zoomOut" aria-label="Zoom out">−</button><span id="zoomText">100%</span><button id="zoomIn" aria-label="Zoom in">+</button><button id="fitBtn" class="fit-btn" title="Fit drawing to view" aria-label="Fit drawing">⛶</button></div>
           <div class="scale-key"><span class="scale-line"></span><span id="scaleLabel">5 ft</span></div>
@@ -113,8 +114,19 @@
       <div class="prefab-existing"><h3>Saved in this project</h3><div id="prefabList" class="prefab-list"></div></div>
     </form>
   </div>
+  <div class="projects-dialog hidden" id="projectsDialog" role="dialog" aria-modal="true" aria-labelledby="projectsTitle">
+    <div class="projects-card">
+      <div class="projects-heading"><div><span class="eyebrow">YOUR DESIGNS</span><h2 id="projectsTitle">My projects</h2></div><button id="closeProjectsDialog" aria-label="Close project library" type="button">×</button></div>
+      <p class="projects-intro">Each project saves separately on this device. Back up your work to keep a copy outside the browser.</p>
+      <div class="projects-actions"><button id="createProjectBtn">＋ New project</button><button id="backupAllBtn">↓ Back up all</button><button id="restoreLibraryBtn">↥ Restore backup</button></div>
+      <div id="projectsList" class="projects-list"></div>
+      <div class="projects-footnote">No account needed. If you clear browser data or change phones, import a backup to restore your designs.</div>
+    </div>
+  </div>
   <input type="file" id="fileInput" accept=".json,application/json" hidden>
   <div id="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=vertical1"></script>
+  <script src="geometry.js?v=update1"></script>
+  <script src="project-store.js?v=update1"></script>
+  <script src="app.js?v=update1"></script>
 </body>
 </html>

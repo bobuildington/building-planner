@@ -1,6 +1,7 @@
-const CACHE_NAME='houseplan-studio-offline-v8';
+const CACHE_NAME='houseplan-studio-offline-v9';
 const APP_FILES=[
-  './', './index.html', './styles.css', './mobile.css?v=vertical1', './app.js?v=vertical1',
+  './', './index.html', './styles.css', './mobile.css?v=update1',
+  './geometry.js?v=update1', './project-store.js?v=update1', './app.js?v=update1',
   './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'
 ];
 self.addEventListener('install',event=>{

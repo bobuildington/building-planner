@@ -5,13 +5,16 @@ A free, mobile-first, installable home floor-plan editor. Everything runs in you
 ## Features
 
 - Draw, select, resize, name, and measure rooms and walls on a feet-based grid.
+- Align room corners and wall endpoints with magnetic guides; toggle **Align** to disable it. Adjacent rooms share one generated wall outline and one 3D wall face rather than overlapping copies.
 - Place doors, windows, labels, and furniture.
 - Place stairs and elevator shafts. They span toward the next level in 3D, with a matching opening in the floor slab above.
 - Create, rename, duplicate, and switch between floors.
 - On upper floors, toggle a dashed blue outline of the floor directly below to align rooms and vertical connections.
 - Create named prefab objects with custom width, depth, height, and color. Reuse them from the Objects palette; templates are included in editable JSON exports.
 - See all floors in an interactive 3D building model. Rotate, zoom, separate levels, or isolate one floor.
-- Phone controls: bottom drawing toolbar, scrolling Objects palette, expandable properties sheet, two-finger pan/zoom, and 3D pinch zoom.
+- Phone controls: bottom drawing toolbar, scrolling Objects palette, expandable properties sheet, larger touch handles, one-tap Edit / Copy / Rotate / Delete actions, two-finger pan/zoom, and 3D pinch zoom.
+- Create as many separate house projects as local storage allows. Open **Projects / My projects** to switch, duplicate, recover an earlier save, or delete a design. Importing a project creates a new saved copy.
+- Download an all-project JSON backup from **My projects → Back up all**. Restore it later without deleting existing projects.
 - Undo/redo, local autosave, and PNG, SVG, editable JSON, or print-to-PDF export.
 - Installable Progressive Web App (PWA) with offline caching after the first online visit.
 
@@ -37,7 +40,7 @@ GitHub Pages on a free account requires a public repository. The source code is 
 
 ## Back up your designs
 
-Projects are saved automatically in the current browser's local storage. Clearing browser data, uninstalling the app, or using another device may remove or isolate them. Export **Editable project (.json)** regularly and import that file on another device or after reinstalling.
+Each project is saved automatically in a separate browser-local document, with a recoverable earlier version when available. The app also requests persistent storage when you open the project library (the browser may decline). Clearing browser data, uninstalling the app, or using another device may still remove or isolate these files. Use **My projects → Back up all** regularly, and keep the downloaded JSON in a safe place. You can also export just one design using **Export → Editable project**.
 
 If you were using an earlier ChatGPT-hosted version, export a JSON backup there and import it here; browser storage does not transfer automatically between different website addresses.
 

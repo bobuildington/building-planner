@@ -2,8 +2,8 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const svg = $('plan'), drawing = $('drawing'), underlay = $('underlayLayer'), tempDrawing = $('tempDrawing'), handles = $('interactionLayer');
+  const snapGuides=$('snapGuideLayer'), geometry=window.HouseGeometry;
   const modelCanvas = $('modelCanvas'), ctx3d = modelCanvas.getContext('2d');
-  const STORAGE = 'houseplan-studio-project-v2';
   let uid = 100;
   const id = () => 'p' + Date.now().toString(36) + (uid++).toString(36);
   const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -38,18 +38,15 @@
     ]};
     return {name:'The Evergreen House',floors:[ground,upper],activeFloorId:ground.id,viewMode:'2d',prefabs:[]};
   };
+  const store=window.HouseProjectStore.createProjectStore(localStorage,()=>id());
   let project;
-  try {
-    const saved=JSON.parse(localStorage.getItem(STORAGE));
-    if(saved&&Array.isArray(saved.floors)&&saved.floors.length&&saved.floors.every(f=>Array.isArray(f.items)))project=saved;
-  }catch(e){}
-  project ||= sample();
+  try{project=store.init(sample())}catch(e){project=sample()}
   if(!Array.isArray(project.prefabs))project.prefabs=[];
   if(!project.floors.some(f=>f.id===project.activeFloorId))project.activeFloorId=project.floors[0].id;
   project.viewMode='2d';
   const floor=()=>project.floors.find(f=>f.id===project.activeFloorId)||project.floors[0];
   let selected=null, activeTool='select', furnitureTool=null, currentTab='properties';
-  let showUnderlay=true;
+  let showUnderlay=true,magnetEnabled=true;
   let snapEnabled=true, pointer=null, draft=null, history=[], future=[], saveTimer=null;
   let sheetOpen=false;
   const isMobile=()=>matchMedia('(max-width: 840px)').matches;
@@ -62,11 +59,12 @@
   const state=()=>JSON.stringify(project);
   function changed(previous){if(previous!==state()){history.push(previous);if(history.length>80)history.shift();future=[];save();render();return true}return false}
   function persistNow(){
-    if(saveTimer===null)return;
+    if(saveTimer===null)return !$('saveState').textContent.includes('unavailable');
     clearTimeout(saveTimer);saveTimer=null;
-    try{localStorage.setItem(STORAGE,JSON.stringify(project));$('saveState').textContent='● Saved locally'}
-    catch(e){$('saveState').textContent='● Save unavailable'}
+    try{store.save(project);$('saveState').textContent='● Saved locally';return true}
+    catch(e){$('saveState').textContent='● Save unavailable';return false}
   }
+  function requireSaved(){if(!persistNow())throw Error('Your current design has not saved. Export it before switching projects.')}
   function save(){
     $('saveState').textContent='● Saving…';
     clearTimeout(saveTimer);
@@ -78,6 +76,19 @@
   function toast(message){const t=$('toast');t.textContent=message;t.classList.add('show');clearTimeout(hintTimer);hintTimer=setTimeout(()=>t.classList.remove('show'),2600)}
   function setStatus(message){$('statusMessage').textContent=message}
   function snap(v){return snapEnabled?Math.round(v*2)/2:round(v)}
+  function snapTolerance(){return Math.min(1.65,Math.max(.18,viewSize().w/Math.max(svg.clientWidth,1)*13))}
+  function snapPoint(raw,exclude=null){
+    return magnetEnabled?geometry.magnetPoint(raw,floor().items,snapTolerance(),snapEnabled?.5:.1,exclude):{x:snap(raw.x),y:snap(raw.y),guideX:null,guideY:null};
+  }
+  function snapBox(box,exclude=null){
+    return magnetEnabled?geometry.magnetBox(box,floor().items,snapTolerance(),snapEnabled?.5:.1,exclude):{x:snap(box.x),y:snap(box.y),guideX:null,guideY:null};
+  }
+  function showSnapGuides(match){
+    if(!match||match.guideX===null&&match.guideY===null){snapGuides.innerHTML='';return}
+    const {w,h}=viewSize(),left=camera.cx-w/2,top=camera.cy-h/2,stroke='stroke="#2eab72" stroke-width=".14" stroke-dasharray=".4 .25"';
+    snapGuides.innerHTML=(match.guideX!==null?`<line x1="${match.guideX}" x2="${match.guideX}" y1="${top}" y2="${top+h}" ${stroke}/>`:'')+
+      (match.guideY!==null?`<line x1="${left}" x2="${left+w}" y1="${match.guideY}" y2="${match.guideY}" ${stroke}/>`:'');
+  }
   function getPoint(event){
     const p=svg.createSVGPoint();p.x=event.clientX;p.y=event.clientY;
     const m=svg.getScreenCTM();if(!m)return {x:0,y:0};
@@ -113,13 +124,14 @@
   function getTarget(evt){const el=evt.target.closest('[data-id]');return el?.getAttribute('data-id')||null}
   function svgText(t,x,y,size,color,extra=''){return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="${color}" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="${size}" ${extra}>${esc(t)}</text>`}
   function showRoom(e){
-    const s=e.id===selected?'#438e68':'#3b574c';
-    return `<g data-id="${e.id}" class="plan-item"><rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="#f0f5ee" fill-opacity=".92" stroke="${s}" stroke-width=".42"/><rect x="${e.x+.26}" y="${e.y+.26}" width="${Math.max(0,e.w-.52)}" height="${Math.max(0,e.h-.52)}" fill="none" stroke="#b3c8b7" stroke-width=".045" pointer-events="none"/></g>`;
+    // Room fills remain individually selectable; their wall outlines are
+    // generated once for the entire floor by collectWallSegments().
+    return `<g data-id="${e.id}" class="plan-item"><rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="#f0f5ee" fill-opacity=".92" stroke="${e.id===selected?'#438e68':'none'}" stroke-width=".12" stroke-dasharray=".4 .2"/><rect x="${e.x+.26}" y="${e.y+.26}" width="${Math.max(0,e.w-.52)}" height="${Math.max(0,e.h-.52)}" fill="none" stroke="#b3c8b7" stroke-width=".045" pointer-events="none"/></g>`;
   }
   function showRoomAnnotation(e){return `<g pointer-events="none"><rect x="${e.x+.75}" y="${e.y+.74}" width="${Math.min(e.w-1.4,Math.max(4,e.name.length*.43+1.4))}" height="2.2" rx=".26" fill="#f6faf5" fill-opacity=".88"/><text x="${e.x+1.1}" y="${e.y+1.58}" fill="#446457" font-family="Inter,Segoe UI,Arial,sans-serif" font-weight="700" font-size=".72">${esc(e.name)}</text><text x="${e.x+1.1}" y="${e.y+2.42}" fill="#8da797" font-family="Inter,Segoe UI,Arial,sans-serif" font-size=".57">${nice(e.w)}' × ${nice(e.h)}'</text></g>`}
   function showWall(e){
     const len=Math.hypot(e.x2-e.x1,e.y2-e.y1);
-    return `<g data-id="${e.id}" class="plan-item"><line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="${selected===e.id?'#348560':'#344e45'}" stroke-width=".44" stroke-linecap="square"/>${selected===e.id?svgText(nice(len)+" ft",(e.x1+e.x2)/2,(e.y1+e.y2)/2-1,.65,'#3c825d','pointer-events="none"'):''}<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="transparent" stroke-width="1.3"/></g>`;
+    return `<g data-id="${e.id}" class="plan-item">${selected===e.id?`<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="#348560" stroke-width=".52" stroke-linecap="round"/>${svgText(nice(len)+" ft",(e.x1+e.x2)/2,(e.y1+e.y2)/2-1,.65,'#3c825d','pointer-events="none"')}`:''}<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="transparent" stroke-width="1.3"/></g>`;
   }
   function showOpening(e){
     const width=e.width||3,door=e.type==='door';
@@ -171,11 +183,13 @@
   function renderPlan(){
     const all=floor().items;
     const order={room:0,wall:1,furniture:2,measure:3,label:4,door:5,window:5};
-    drawing.innerHTML=[...all].sort((a,b)=>(order[a.type]||0)-(order[b.type]||0)).map(showItem).join('')+all.filter(e=>e.type==='room').map(showRoomAnnotation).join('');
+    const walls=geometry.collectWallSegments(all).map(s=>`<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="${s.roomIds.length>1?'#426c59':'#3b574c'}" stroke-width=".42" stroke-linecap="square" pointer-events="none"/>`).join('');
+    const other=[...all].filter(e=>e.type!=='room'&&e.type!=='wall').sort((a,b)=>(order[a.type]||0)-(order[b.type]||0)).map(showItem).join('');
+    drawing.innerHTML=all.filter(e=>e.type==='room').map(showRoom).join('')+walls+other+all.filter(e=>e.type==='wall').map(showWall).join('')+all.filter(e=>e.type==='room').map(showRoomAnnotation).join('');
     renderUnderlay();
     const e=itemById(selected);
     let h='';
-    const dot=(x,y,key)=>`<g data-handle="${key}" style="cursor:crosshair"><circle data-handle="${key}" cx="${x}" cy="${y}" r="${isMobile()?1.25:.47}" fill="transparent"/><circle data-handle="${key}" cx="${x}" cy="${y}" r="${isMobile()?.55:.35}" fill="white" stroke="#3a9668" stroke-width=".13"/></g>`;
+    const dot=(x,y,key)=>`<g data-handle="${key}" style="cursor:crosshair"><circle data-handle="${key}" cx="${x}" cy="${y}" r="${isMobile()?1.75:.47}" fill="transparent"/><circle data-handle="${key}" cx="${x}" cy="${y}" r="${isMobile()?.68:.35}" fill="white" stroke="#3a9668" stroke-width=".13"/></g>`;
     if(e?.type==='room'||e?.type==='furniture'){
       const x=e.x,y=e.y,w=e.w,hgt=e.h;
       h+=`<rect x="${x}" y="${y}" width="${w}" height="${hgt}" fill="none" stroke="#3d9b6c" stroke-width=".09" stroke-dasharray=".3 .21" pointer-events="none"/>`;
@@ -240,6 +254,11 @@
     document.querySelectorAll('.right-tab').forEach(el=>el.classList.toggle('active',el.dataset.tab===currentTab));
     $('mobileMoreBtn').classList.toggle('tool-engaged',['label','measure','pan'].includes(activeTool));
     $('mobileFurnitureBtn').classList.toggle('tool-engaged',activeTool==='furniture');
+    const chosen=itemById(selected),quickVisible=!!chosen&&project.viewMode==='2d';
+    $('selectionToolbar').classList.toggle('hidden',!quickVisible);
+    $('quickRotate').hidden=chosen?.type!=='furniture';
+    $('magnetToggle').classList.toggle('active',magnetEnabled);
+    $('magnetToggle').setAttribute('aria-pressed',String(magnetEnabled));
     updateMobileUI();
   }
   function updateMobileUI(){
@@ -284,7 +303,7 @@
   function beginPinch(){
     if(touchPoints.size<2)return;
     if(pointer?.old&&pointer?.itemId){const e=itemById(pointer.itemId);if(e)Object.assign(e,clone(pointer.old))}
-    pointer=null;draft=null;tempDrawing.innerHTML='';renderPlan();
+    pointer=null;draft=null;tempDrawing.innerHTML='';showSnapGuides(null);renderPlan();
     const p=[...touchPoints.values()],mid={x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
     pinch={distance:Math.max(10,Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)),zoom:camera.zoom,anchor:getPoint({clientX:mid.x,clientY:mid.y})};
   }
@@ -306,7 +325,11 @@
     }
     const raw=getPoint(evt),p={x:snap(raw.x),y:snap(raw.y)};
     if(activeTool==='pan'||evt.buttons===4){pointer={kind:'pan',start:{x:evt.clientX,y:evt.clientY},before:{...camera}};return}
-    if(['room','wall','measure'].includes(activeTool)){draft={type:activeTool,a:p,b:p};pointer={kind:'draw',start:p};renderDraft();return}
+    if(['room','wall','measure'].includes(activeTool)){
+      const aligned=snapPoint(raw);
+      draft={type:activeTool,a:{x:aligned.x,y:aligned.y},b:{x:aligned.x,y:aligned.y}};
+      pointer={kind:'draw',start:draft.a};showSnapGuides(aligned);renderDraft();return;
+    }
     if(activeTool==='door'||activeTool==='window'){
       const wall=nearWall(raw);
       if(!wall){toast('Click close to a wall to place a '+activeTool);return}
@@ -349,18 +372,30 @@
     }
     let p={x:snap(raw.x),y:snap(raw.y)};
     if(pointer.kind==='draw'){
+      const aligned=snapPoint(raw);p={x:aligned.x,y:aligned.y};
       if(evt.shiftKey&&(activeTool==='wall'||activeTool==='measure')){
         if(Math.abs(p.x-pointer.start.x)>Math.abs(p.y-pointer.start.y))p.y=pointer.start.y;else p.x=pointer.start.x;
       }
-      draft.b=p;renderDraft();return;
+      showSnapGuides(aligned);draft.b=p;renderDraft();return;
     }
     const e=itemById(pointer.itemId);if(!e)return;
     Object.assign(e,clone(pointer.old));
-    if(pointer.kind==='resize')resize(e,pointer.handle,p,pointer.old);
+    if(pointer.kind==='resize'){
+      const aligned=snapPoint(raw,e.id);p={x:aligned.x,y:aligned.y};showSnapGuides(aligned);
+      resize(e,pointer.handle,p,pointer.old);
+    }
     else{
       const dx=snap(p.x-pointer.start.x),dy=snap(p.y-pointer.start.y);
-      if(e.type==='wall'||e.type==='measure'){e.x1=round(pointer.old.x1+dx);e.y1=round(pointer.old.y1+dy);e.x2=round(pointer.old.x2+dx);e.y2=round(pointer.old.y2+dy)}
-      else{e.x=round(pointer.old.x+dx);e.y=round(pointer.old.y+dy)}
+      if(e.type==='wall'||e.type==='measure'){
+        const aligned=snapPoint({x:pointer.old.x1+dx,y:pointer.old.y1+dy},e.id);
+        const offsetX=aligned.x-pointer.old.x1,offsetY=aligned.y-pointer.old.y1;
+        e.x1=round(pointer.old.x1+offsetX);e.y1=round(pointer.old.y1+offsetY);
+        e.x2=round(pointer.old.x2+offsetX);e.y2=round(pointer.old.y2+offsetY);
+        showSnapGuides(aligned);
+      }else if(e.type==='room'||e.type==='furniture'){
+        const aligned=snapBox({x:pointer.old.x+dx,y:pointer.old.y+dy,w:e.w,h:e.h},e.id);
+        e.x=aligned.x;e.y=aligned.y;showSnapGuides(aligned);
+      }else{e.x=round(pointer.old.x+dx);e.y=round(pointer.old.y+dy);showSnapGuides(null)}
     }
     renderPlan();
   }
@@ -369,7 +404,7 @@
       touchPoints.delete(evt.pointerId);
       if(pinch){if(touchPoints.size<2)pinch=null;pointer=null;return}
     }
-    if(!pointer)return;
+    if(!pointer){showSnapGuides(null);return}
     if(pointer.kind==='draw'&&draft){
       const a=draft.a,b=draft.b,w=Math.abs(b.x-a.x),h=Math.abs(b.y-a.y),length=Math.hypot(w,h);
       const before=state();
@@ -380,15 +415,15 @@
         const e={id:id(),type:draft.type,x1:a.x,y1:a.y,x2:b.x,y2:b.y};floor().items.push(e);selected=e.id;setTool('select');selected=e.id;
       }else toast('Draw a larger shape to add it');
       if(selected)sheetOpen=true;
-      draft=null;tempDrawing.innerHTML='';pointer=null;changed(before);render();return;
+      draft=null;tempDrawing.innerHTML='';pointer=null;showSnapGuides(null);changed(before);render();return;
     }
     if(pointer.kind==='move'||pointer.kind==='resize')changed(pointer.before);
-    pointer=null;render();
+    pointer=null;showSnapGuides(null);render();
   }
   svg.addEventListener('pointerdown',onDown);
   svg.addEventListener('pointermove',onMove);
   svg.addEventListener('pointerup',onUp);
-  svg.addEventListener('pointercancel',evt=>{touchPoints.delete(evt.pointerId);pinch=null;pointer=null;draft=null;tempDrawing.innerHTML='';render()});
+  svg.addEventListener('pointercancel',evt=>{touchPoints.delete(evt.pointerId);pinch=null;pointer=null;draft=null;tempDrawing.innerHTML='';showSnapGuides(null);render()});
   svg.addEventListener('wheel',evt=>{if(project.viewMode!=='2d')return;evt.preventDefault();camera.zoom=clamp(camera.zoom*(evt.deltaY<0?1.12:.89),.35,3.8);updateView()},{passive:false});
   document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{setMode('2d');setTool(b.dataset.tool)}));
   $('furniturePalette').addEventListener('click',e=>{
@@ -418,6 +453,7 @@
   }
   $('addFloorBtn').addEventListener('click',()=>addFloor());
   $('snapCheck').addEventListener('change',e=>{snapEnabled=e.target.checked;setStatus(snapEnabled?'Snap to half-foot grid enabled':'Freehand positioning enabled')});
+  $('magnetToggle').addEventListener('click',()=>{magnetEnabled=!magnetEnabled;showSnapGuides(null);render();toast(magnetEnabled?'Magnetic wall alignment enabled':'Magnetic wall alignment disabled')});
   $('underlayToggle').addEventListener('click',()=>{showUnderlay=!showUnderlay;renderPlan();renderFloorTabs()});
   document.querySelectorAll('.right-tab').forEach(b=>b.addEventListener('click',()=>{currentTab=b.dataset.tab;sheetOpen=true;render()}));
   $('propertiesContent').addEventListener('change',evt=>{
@@ -452,8 +488,24 @@
   function undo(){if(!history.length)return;future.push(state());project=JSON.parse(history.pop());selected=null;save();render()}
   function redo(){if(!future.length)return;history.push(state());project=JSON.parse(future.pop());selected=null;save();render()}
   function deleteSelected(){if(!selected)return;const before=state();floor().items=floor().items.filter(e=>e.id!==selected);selected=null;changed(before)}
+  function duplicateSelected(){
+    const e=itemById(selected);if(!e)return;
+    const before=state(),copyItem=clone(e);copyItem.id=id();
+    if(e.type==='wall'||e.type==='measure'){copyItem.x1+=2;copyItem.x2+=2;copyItem.y1+=2;copyItem.y2+=2}
+    else{copyItem.x=round((copyItem.x||0)+2);copyItem.y=round((copyItem.y||0)+2)}
+    floor().items.push(copyItem);activeTool='select';furnitureTool=null;selected=copyItem.id;sheetOpen=false;
+    changed(before);toast('Copy placed — drag to position');
+  }
+  $('quickEdit').addEventListener('click',()=>{if(!selected)return;activeTool='select';furnitureTool=null;currentTab='properties';sheetOpen=true;render()});
+  $('quickDuplicate').addEventListener('click',duplicateSelected);
+  $('quickRotate').addEventListener('click',()=>{
+    const e=itemById(selected);if(e?.type!=='furniture')return;
+    const before=state();e.rotation=((e.rotation||0)+90)%360;activeTool='select';furnitureTool=null;changed(before);
+  });
+  $('quickDelete').addEventListener('click',()=>{activeTool='select';furnitureTool=null;deleteSelected()});
   document.addEventListener('keydown',evt=>{
     if(!$('prefabDialog').classList.contains('hidden')){if(evt.key==='Escape')closePrefabDialog();return}
+    if(!$('projectsDialog').classList.contains('hidden')){if(evt.key==='Escape')closeProjectsDialog();return}
     if(evt.target.matches('input,textarea,select'))return;
     const key=evt.key.toLowerCase();
     if((evt.ctrlKey||evt.metaKey)&&key==='z'){evt.preventDefault();evt.shiftKey?redo():undo();return}
@@ -574,24 +626,20 @@
         const x=Math.min(...xs),y=Math.min(...ys);
         return {x,y,w:Math.max(...xs)-x,h:Math.max(...ys)-y};
       }):[];
+      // The same merged walls used in 2D also drive the 3D faces. Adjacent
+      // rooms never generate coincident wall faces or overlapping top rails.
+      for(const s of geometry.collectWallSegments(f.items)){
+        const a=[s.x1,s.y1],b=[s.x2,s.y2],len=Math.hypot(s.x2-s.x1,s.y2-s.y1);
+        vertical(a,b,z,8,s.roomIds.length>1?'rgba(146,181,157,.54)':'rgba(163,195,174,.62)');
+        const half=.18,ox=-(s.y2-s.y1)/len*half,oy=(s.x2-s.x1)/len*half;
+        add([[s.x1+ox,s.y1+oy,z+8],[s.x2+ox,s.y2+oy,z+8],[s.x2-ox,s.y2-oy,z+8],[s.x1-ox,s.y1-oy,z+8]],'#779e86','#618772',.5,'top');
+      }
       f.items.forEach((e,k)=>{
         if(e.type==='room'){
           const {x,y,w,h}=e;
           // Slabs follow the actual room footprint, not the bounding box of
           // every floor. An added room must never create dangling edge lines.
           for(const part of slabSections(e,holes))cuboid([[part.x,part.y],[part.x+part.w,part.y],[part.x+part.w,part.y+part.h],[part.x,part.y+part.h]],z-.25,.35,palette[k%palette.length],'#9db3a3','floor',.45);
-          // Slightly translucent wall faces preserve interior visibility.
-          vertical([x,y],[x+w,y],z,8,'rgba(173,200,183,.61)');
-          vertical([x+w,y],[x+w,y+h],z,8,'rgba(125,162,143,.58)');
-          vertical([x+w,y+h],[x,y+h],z,8,'rgba(140,180,158,.54)');
-          vertical([x,y+h],[x,y],z,8,'rgba(189,211,194,.57)');
-          const cap=Math.min(.38,w/3,h/3);
-          add([[x,y,z+8],[x+w,y,z+8],[x+w,y+cap,z+8],[x,y+cap,z+8]],'#779e86','#618772',.5,'top');
-          add([[x+w-cap,y,z+8],[x+w,y,z+8],[x+w,y+h,z+8],[x+w-cap,y+h,z+8]],'#779e86','#618772',.5,'top');
-          add([[x,y+h-cap,z+8],[x+w,y+h-cap,z+8],[x+w,y+h,z+8],[x,y+h,z+8]],'#779e86','#618772',.5,'top');
-          add([[x,y,z+8],[x+cap,y,z+8],[x+cap,y+h,z+8],[x,y+h,z+8]],'#779e86','#618772',.5,'top');
-        }else if(e.type==='wall'){
-          vertical([e.x1,e.y1],[e.x2,e.y2],z,8,'rgba(137,173,152,.75)');
         }else if(e.type==='furniture'){
           const {x,y,w,h}=e;
           if(e.subType==='stairs'){
@@ -649,19 +697,79 @@
   $('showAllFloors').addEventListener('change',e=>{showAll=e.target.checked;render3D()});
   $('separateFloors').addEventListener('change',e=>{separateFloors=e.target.checked;render3D()});
   $('reset3D').addEventListener('click',()=>{orbit={theta:-.73,phi:.86,zoom:1};render3D()});
-  $('newBtn').addEventListener('click',()=>{
-    if(!confirm('Create a new blank project? Your current project can be downloaded first using Export → Editable project.'))return;
-    const before=state(),f={id:id(),name:'Ground floor',items:[]};
-    project={name:'Untitled house',floors:[f],activeFloorId:f.id,viewMode:'2d',prefabs:[]};
-    selected=null;currentTab='properties';changed(before);fitDrawing();toast('New blank project created');
+  function activateProject(next){
+    project=next;if(!Array.isArray(project.prefabs))project.prefabs=[];
+    project.viewMode='2d';selected=null;activeTool='select';furnitureTool=null;
+    history=[];future=[];pointer=null;draft=null;showSnapGuides(null);
+    camera={cx:22,cy:18.5,zoom:1};currentTab='properties';sheetOpen=false;
+    closeMobileToolMenus();closeProjectsDialog();render();fitDrawing();
+  }
+  function createNewProject(){
+    try{
+      requireSaved();
+      const f={id:id(),name:'Ground floor',items:[]};
+      const next=store.add({name:'Untitled house',floors:[f],activeFloorId:f.id,viewMode:'2d',prefabs:[]});
+      activateProject(next);toast('New project ready. Your other designs are in My projects.');
+    }catch(e){toast('Could not create project: '+e.message)}
+  }
+  function renderProjectsList(){
+    const entries=store.list();
+    $('projectsList').innerHTML=entries.map(entry=>{
+      const current=entry.id===project.id,when=new Date(entry.updatedAt).toLocaleDateString();
+      return `<div class="project-entry ${current?'current':''}"><div class="project-entry-info"><strong>${esc(entry.name)} ${current?'· Current':''}</strong><small>${entry.floors} floor${entry.floors===1?'':'s'} · ${entry.rooms} rooms · Saved ${esc(when)}</small></div><div class="project-entry-actions"><button data-project-operation="open" data-project-id="${esc(entry.id)}" ${current?'disabled':''}>${current?'Open now':'Open'}</button><button data-project-operation="duplicate" data-project-id="${esc(entry.id)}">Copy</button>${store.hasRecovery(entry.id)?`<button data-project-operation="recover" data-project-id="${esc(entry.id)}">Recover</button>`:''}<button data-project-operation="delete" data-project-id="${esc(entry.id)}" ${entries.length===1?'disabled':''}>Delete</button></div></div>`;
+    }).join('');
+  }
+  function closeProjectsDialog(){$('projectsDialog').classList.add('hidden')}
+  function openProjectsDialog(){
+    persistNow();renderProjectsList();$('projectsDialog').classList.remove('hidden');
+    // Browsers can protect frequently used offline projects from automatic
+    // storage-pressure eviction. A downloaded backup is still recommended.
+    if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
+  }
+  $('newBtn').addEventListener('click',createNewProject);
+  $('projectsBtn').addEventListener('click',openProjectsDialog);
+  $('closeProjectsDialog').addEventListener('click',closeProjectsDialog);
+  $('projectsDialog').addEventListener('click',e=>{if(e.target===$('projectsDialog'))closeProjectsDialog()});
+  $('createProjectBtn').addEventListener('click',createNewProject);
+  $('backupAllBtn').addEventListener('click',()=>{
+    try{persistNow();download(new Blob([JSON.stringify(store.exportAll(),null,2)],{type:'application/json'}),'houseplan-all-projects-backup.json');toast('All projects downloaded as a backup')}
+    catch(e){toast('Backup failed: '+e.message)}
   });
-  $('importBtn').addEventListener('click',()=>$('fileInput').click());
+  $('restoreLibraryBtn').addEventListener('click',()=>$('fileInput').click());
+  $('projectsList').addEventListener('click',e=>{
+    const b=e.target.closest('[data-project-operation]');if(!b)return;
+    const operation=b.dataset.projectOperation,target=b.dataset.projectId;
+    try{
+      requireSaved();
+      if(operation==='open'){
+        const next=store.open(target);if(!next)throw Error('That project could not be read');
+        activateProject(next);toast('Project opened');
+      }else if(operation==='duplicate'){
+        const next=store.duplicate(target);if(!next)throw Error('Project not found');
+        activateProject(next);toast('Project copied');
+      }else if(operation==='delete'){
+        if(!confirm('Permanently delete this project from this device? Export a backup first if you want to keep it.'))return;
+        if(!store.remove(target))throw Error('The last project cannot be deleted');
+        if(target===project.id){
+          const next=store.open(store.activeId());if(next)activateProject(next);
+        }
+        renderProjectsList();toast('Project deleted');
+      }else if(operation==='recover'){
+        if(!confirm('Restore an earlier saved version of this project? The current version will be replaced.'))return;
+        const recovered=store.recover(target);if(!recovered)throw Error('No recovery save available');
+        if(target===project.id)activateProject(recovered);
+        else store.open(project.id);
+        renderProjectsList();toast('Earlier save restored');
+      }
+    }catch(err){toast('Project action failed: '+err.message)}
+  });
   $('projectMenuBtn').addEventListener('click',e=>{e.stopPropagation();$('exportMenu').classList.add('hidden');const open=$('projectMenu').classList.toggle('hidden')===false;$('projectMenuBtn').setAttribute('aria-expanded',String(open))});
   $('projectMenu').addEventListener('click',e=>{
     const b=e.target.closest('[data-project-action]');if(!b)return;
     $('projectMenu').classList.add('hidden');$('projectMenuBtn').setAttribute('aria-expanded','false');
     if(b.dataset.projectAction==='new')$('newBtn').click();
-    if(b.dataset.projectAction==='open')$('importBtn').click();
+    if(b.dataset.projectAction==='library')openProjectsDialog();
+    if(b.dataset.projectAction==='import')$('fileInput').click();
     if(b.dataset.projectAction==='overview'){currentTab='overview';sheetOpen=true;render()}
   });
   function renderPrefabList(){
@@ -691,20 +799,41 @@
     if(furnitureTool==='prefab:'+p.id)furnitureTool=null;
     changed(before);renderPrefabList();
   });
+  function validatedImport(obj){
+    if(!obj||!Array.isArray(obj.floors)||!obj.floors.length||obj.floors.length>50||obj.floors.some(f=>typeof f.name!=='string'||!Array.isArray(f.items)||f.items.length>10000))throw Error('Not a valid HousePlan project');
+    const floors=obj.floors.map(f=>{
+      const items=f.items.map(item=>{
+        if(!['room','wall','door','window','furniture','measure','label'].includes(item.type))throw Error('Unsupported drawing item');
+        for(const k of ['x','y','w','h','x1','y1','x2','y2','width','height','angle','rotation'])if(k in item&&(!Number.isFinite(item[k])||Math.abs(item[k])>100000))throw Error('Invalid measurements');
+        if((item.type==='room'||item.type==='furniture')&&(!Number.isFinite(item.x)||!Number.isFinite(item.y)||!Number.isFinite(item.w)||!Number.isFinite(item.h)||item.w<.5||item.h<.5))throw Error('Invalid room or object');
+        const clean={...item,id:id()};
+        if('name' in clean)clean.name=String(clean.name).slice(0,70);
+        if('text' in clean)clean.text=String(clean.text).slice(0,70);
+        if('color' in clean)clean.color=safeColor(clean.color);
+        return clean;
+      });
+      return {id:id(),name:f.name.slice(0,70),items};
+    });
+    if(Array.isArray(obj.prefabs)&&obj.prefabs.length>60)throw Error('Too many custom prefabs');
+    const prefabs=Array.isArray(obj.prefabs)?obj.prefabs.filter(p=>p&&typeof p==='object'&&Number.isFinite(p.w)&&Number.isFinite(p.h)).map(p=>({id:id(),name:String(p.name||'Custom object').slice(0,50),w:clamp(p.w,.5,100),h:clamp(p.h,.5,100),height:clamp(Number(p.height)||3,.5,30),color:safeColor(p.color)})):[];
+    const originalIndex=obj.floors.findIndex(f=>f.id===obj.activeFloorId);
+    return {name:String(obj.name||'Imported project').slice(0,70),floors,activeFloorId:floors[Math.max(0,originalIndex)].id,viewMode:'2d',prefabs};
+  }
   $('fileInput').addEventListener('change',async e=>{
     const file=e.target.files[0];if(!file)return;
     try{
-      if(file.size>5e6)throw Error('File is too large');
+      if(file.size>2e7)throw Error('File is too large');
       const obj=JSON.parse(await file.text());
-      if(!obj||!Array.isArray(obj.floors)||!obj.floors.length||obj.floors.length>50||obj.floors.some(f=>typeof f.name!=='string'||!Array.isArray(f.items)||f.items.length>10000))throw Error('Not a valid HousePlan project');
-      for(const f of obj.floors)for(const item of f.items){
-        if(!['room','wall','door','window','furniture','measure','label'].includes(item.type))throw Error('Unsupported drawing item');
-        for(const k of ['x','y','w','h','x1','y1','x2','y2'])if(k in item&&(!Number.isFinite(item[k])||Math.abs(item[k])>100000))throw Error('Invalid measurements');
+      requireSaved();
+      if(obj?.format==='houseplan-studio-library'){
+        if(!Array.isArray(obj.projects)||obj.projects.length>100)throw Error('Invalid backup');
+        const added=store.importAll({...obj,projects:obj.projects.map(validatedImport)});
+        const opened=store.open(added[0].id);
+        activateProject(opened);toast(added.length+' projects restored — existing projects kept');
+      }else{
+        const next=store.add(validatedImport(obj));
+        activateProject(next);toast('Project imported as a new saved design');
       }
-      if(Array.isArray(obj.prefabs)&&obj.prefabs.length>60)throw Error('Too many custom prefabs');
-      const importedPrefabs=Array.isArray(obj.prefabs)?obj.prefabs.filter(p=>p&&typeof p==='object'&&Number.isFinite(p.w)&&Number.isFinite(p.h)).map(p=>({id:String(p.id||id()).slice(0,70),name:String(p.name||'Custom object').slice(0,50),w:clamp(p.w,.5,100),h:clamp(p.h,.5,100),height:clamp(Number(p.height)||3,.5,30),color:safeColor(p.color)})):[];
-      const before=state();project={name:String(obj.name||'Imported project').slice(0,70),floors:obj.floors,activeFloorId:obj.floors.some(f=>f.id===obj.activeFloorId)?obj.activeFloorId:obj.floors[0].id,viewMode:'2d',prefabs:importedPrefabs};
-      selected=null;changed(before);fitDrawing();toast('Project imported successfully');
     }catch(err){toast('Could not open project: '+err.message)}finally{e.target.value=''}
   });
   $('exportBtn').addEventListener('click',e=>{e.stopPropagation();$('projectMenu').classList.add('hidden');$('projectMenuBtn').setAttribute('aria-expanded','false');$('exportMenu').classList.toggle('hidden')});
