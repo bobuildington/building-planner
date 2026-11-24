@@ -6,9 +6,12 @@ A free, mobile-first, installable home floor-plan editor. Everything runs in you
 
 - Draw, select, resize, name, and measure rooms and walls on a feet-based grid.
 - Place doors, windows, labels, and furniture.
+- Place stairs and elevator shafts. They span toward the next level in 3D, with a matching opening in the floor slab above.
 - Create, rename, duplicate, and switch between floors.
+- On upper floors, toggle a dashed blue outline of the floor directly below to align rooms and vertical connections.
+- Create named prefab objects with custom width, depth, height, and color. Reuse them from the Objects palette; templates are included in editable JSON exports.
 - See all floors in an interactive 3D building model. Rotate, zoom, separate levels, or isolate one floor.
-- Phone controls: bottom drawing toolbar, furniture palette, expandable properties sheet, two-finger pan/zoom, and 3D pinch zoom.
+- Phone controls: bottom drawing toolbar, scrolling Objects palette, expandable properties sheet, two-finger pan/zoom, and 3D pinch zoom.
 - Undo/redo, local autosave, and PNG, SVG, editable JSON, or print-to-PDF export.
 - Installable Progressive Web App (PWA) with offline caching after the first online visit.
 

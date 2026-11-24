@@ -1,5 +1,28 @@
 /* Phone-first interactions. Desktop keeps the original full studio layout. */
 .mobile-only { display: none; }
+.underlay-toggle { position:absolute; z-index:3; top:12px; left:12px; min-height:36px; border:1px solid #a7c6d3; border-radius:9px; background:#f4fbffed; color:#376d82; box-shadow:0 3px 13px #163e4a19; padding:7px 11px; font-size:11px; font-weight:750; }
+.underlay-toggle[aria-pressed="false"] { background:#fff; border-color:#dce9e5; color:#78958b; }
+.underlay-toggle.hidden,.prefab-dialog.hidden { display:none; }
+.furniture-grid .new-prefab-button { border:1px dashed #7bac95; color:#286e4e; background:#f0f9f2; }
+.furniture-grid [data-prefab-id] { overflow:hidden; overflow-wrap:anywhere; line-height:1.2; }
+.prefab-dialog { position:fixed; z-index:60; inset:0; display:grid; place-items:center; overflow-y:auto; padding:20px; background:#142e248f; }
+.prefab-card { width:min(100%,410px); max-height:calc(100dvh - 40px); overflow:auto; border-radius:18px; background:#fff; padding:22px; box-shadow:0 20px 55px #102b2250; display:flex; flex-direction:column; gap:12px; }
+.prefab-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.prefab-heading h2 { margin:0; color:#2c5640; font-family:Georgia,serif; font-size:24px; font-weight:500; }
+.prefab-heading button { flex:0 0 38px; height:38px; border:0; background:#f2f6f2; border-radius:8px; color:#668072; font-size:25px; }
+.prefab-card p { margin:0; color:#789083; font-size:12px; line-height:1.5; }
+.prefab-card label { display:flex; flex-direction:column; gap:6px; color:#597365; font-weight:750; font-size:12px; }
+.prefab-card input { min-height:42px; padding:8px 10px; border-radius:8px; border:1px solid #dbe7dc; color:#28513e; background:#fbfdfb; font-size:16px; width:100%; }
+.prefab-card input[type="color"] { width:75px; padding:4px; }
+.prefab-dimensions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.prefab-save { min-height:44px; border:0; border-radius:9px; background:#245c47; color:#fff; font-weight:800; font-size:13px; }
+.prefab-existing { border-top:1px solid #e4ece5; margin-top:6px; padding-top:12px; }
+.prefab-existing h3 { margin:0 0 9px; color:#597866; font-size:12px; }
+.prefab-list { display:flex; flex-direction:column; gap:7px; }
+.prefab-list p { color:#93a69a; }
+.prefab-entry { display:flex; gap:8px; align-items:center; padding:8px; border:1px solid #e3eae2; border-radius:8px; color:#365845; font-size:12px; }
+.prefab-entry span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.prefab-entry button { border:0; background:#fff2ee; color:#a25f52; font-weight:700; min-height:32px; border-radius:6px; padding:4px 9px; }
 
 @media (max-width: 840px) {
   :root { font-size: 14px; }
@@ -152,6 +175,9 @@
   .three-d-controls button { min-height: 30px; }
   .model-floor-list { top: 10px; right: 8px; }
   .model-floor-tag { max-width: 121px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+  .underlay-toggle { top:8px; left:8px; min-height:37px; padding:8px; font-size:10px; }
+  .prefab-dialog { padding:10px; }
+  .prefab-card { max-height:calc(100dvh - 20px); padding:17px; }
   #toast { bottom: calc(129px + env(safe-area-inset-bottom, 0px)); z-index: 21; }
 }
 
