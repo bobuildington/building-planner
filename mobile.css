@@ -71,6 +71,9 @@
 .walk-pad button[data-walk="forward"] { grid-column:2; grid-row:1; }
 .walk-pad button[data-walk="left"] { grid-column:1; grid-row:1; }
 .walk-pad button[data-walk="right"] { grid-column:3; grid-row:1; }
+.walk-pad button[data-walk="strafeLeft"] { grid-column:1; grid-row:2; }
+.walk-pad button[data-walk="strafeRight"] { grid-column:3; grid-row:2; }
+.walk-pad button:active { background:#bfe3cc; border-color:#77bd94; transform:scale(.96); }
 .walk-toolbar small { font-size:10px; line-height:1.4; color:#789385; }
 .three-d-stage.walking { background:#e5edeb; }
 .three-d-stage.walking .model-floor-list,.three-d-stage.walking .three-d-help { display:none; }

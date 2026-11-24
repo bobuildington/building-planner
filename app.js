@@ -553,7 +553,7 @@
     if((evt.ctrlKey||evt.metaKey)&&key==='z'){evt.preventDefault();evt.shiftKey?redo():undo();return}
     if((evt.ctrlKey||evt.metaKey)&&key==='y'){evt.preventDefault();redo();return}
     if(project.viewMode==='3d'&&cameraMode==='walk'){
-      const actions={w:'forward',arrowup:'forward',s:'back',arrowdown:'back',a:'left',arrowleft:'left',d:'right',arrowright:'right'};
+      const actions={w:'forward',arrowup:'forward',s:'back',arrowdown:'back',a:'left',arrowleft:'left',d:'right',arrowright:'right',q:'strafeLeft',e:'strafeRight'};
       if(actions[key]){evt.preventDefault();walkStep(actions[key]);return}
       if(key==='escape'){evt.preventDefault();exitWalk();return}
       return;
@@ -853,20 +853,18 @@
     cameraMode='walk';resetWalk();$('threeDStage').classList.add('walking');$('walkToolbar').classList.remove('hidden');render3D();
     toast('Walkthrough started. Drag to look, use the arrows to move.');
   }
-  function exitWalk(){cameraMode='orbit';$('threeDStage').classList.remove('walking');$('walkToolbar').classList.add('hidden');render3D()}
+  function exitWalk(){stopWalkHold();cameraMode='orbit';$('threeDStage').classList.remove('walking');$('walkToolbar').classList.add('hidden');render3D()}
   function walkStep(direction){
     if(cameraMode!=='walk')return;
-    if(direction==='left')walk.yaw-=Math.PI/12;
-    else if(direction==='right')walk.yaw+=Math.PI/12;
+    if(direction==='left')walk.yaw-=Math.PI/24;
+    else if(direction==='right')walk.yaw+=Math.PI/24;
     else{
-      const sign=direction==='forward'?1:-1;
-      const x=walk.x+Math.cos(walk.yaw)*1.25*sign,y=walk.y+Math.sin(walk.yaw)*1.25*sign;
-      // Stay within the drawn floor footprint. For precise architectural
-      // collision or door swinging, a full physics engine would be needed.
       const rooms=floor().items.filter(e=>e.type==='room');
-      if((!rooms.length||rooms.some(r=>x>=r.x+.3&&x<=r.x+r.w-.3&&y>=r.y+.3&&y<=r.y+r.h-.3))&&!occupiedInWalk(x,y,.3)){walk.x=x;walk.y=y}
+      const doors=floor().items.filter(e=>e.type==='door');
+      const next=window.HouseWalkNavigation.move(walk,direction,.65,rooms,doors,occupiedInWalk);
+      walk.x=next.x;walk.y=next.y;
     }
-    render3D();
+    requestModelRender();
   }
   let pendingWalkFrame=false;
   function requestModelRender(){
@@ -877,8 +875,25 @@
   }
   $('enterWalk').addEventListener('click',enterWalk);
   $('exitWalk').addEventListener('click',exitWalk);
-  $('walkFloor').addEventListener('change',e=>{project.activeFloorId=e.target.value;selected=null;resetWalk();save();render()});
-  document.querySelectorAll('[data-walk]').forEach(b=>b.addEventListener('click',()=>walkStep(b.dataset.walk)));
+  $('walkFloor').addEventListener('change',e=>{stopWalkHold();project.activeFloorId=e.target.value;selected=null;resetWalk();save();render()});
+  let walkingHoldTimeout=null,walkingHoldInterval=null;
+  function stopWalkHold(){
+    clearTimeout(walkingHoldTimeout);clearInterval(walkingHoldInterval);
+    walkingHoldTimeout=null;walkingHoldInterval=null;
+  }
+  document.querySelectorAll('[data-walk]').forEach(b=>{
+    b.addEventListener('pointerdown',e=>{
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      e.preventDefault();stopWalkHold();walkStep(b.dataset.walk);
+      if(b.setPointerCapture)b.setPointerCapture(e.pointerId);
+      walkingHoldTimeout=setTimeout(()=>{
+        walkingHoldInterval=setInterval(()=>walkStep(b.dataset.walk),135);
+      },240);
+    });
+    for(const event of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(event,stopWalkHold);
+    // Keyboard activation creates a click without pointerdown.
+    b.addEventListener('click',e=>{if(e.detail===0)walkStep(b.dataset.walk)});
+  });
   const modelTouches=new Map();let modelPinch=null;
   modelCanvas.addEventListener('pointerdown',e=>{
     modelCanvas.setPointerCapture(e.pointerId);

@@ -98,7 +98,7 @@
             <canvas id="modelCanvas" aria-label="Interactive three-dimensional building model and walkthrough"></canvas>
             <div class="three-d-help">Drag to rotate · Scroll to zoom</div>
             <div class="three-d-controls" id="orbitControls"><label><input type="checkbox" id="showAllFloors" checked> Show all floors</label><label><input type="checkbox" id="separateFloors"> Separate levels</label><button id="reset3D">Reset view</button><button id="enterWalk" class="walk-switch">⇢ Walk inside</button></div>
-            <div class="walk-toolbar hidden" id="walkToolbar" aria-label="Walkthrough controls"><div class="walk-heading"><strong>Inside the building</strong><button type="button" id="exitWalk">✕ Exit walk</button></div><label>Explore floor <select id="walkFloor" aria-label="Walkthrough floor"></select></label><div class="walk-pad"><button type="button" data-walk="left" aria-label="Turn left">↶</button><button type="button" data-walk="forward" aria-label="Move forward">↑</button><button type="button" data-walk="right" aria-label="Turn right">↷</button><button type="button" data-walk="back" aria-label="Move backward">↓</button></div><small>Drag the scene to look around. Use arrows or W A S D on a keyboard.</small></div>
+            <div class="walk-toolbar hidden" id="walkToolbar" aria-label="Walkthrough controls"><div class="walk-heading"><strong>Inside the building</strong><button type="button" id="exitWalk">✕ Exit walk</button></div><label>Explore floor <select id="walkFloor" aria-label="Walkthrough floor"></select></label><div class="walk-pad"><button type="button" data-walk="left" aria-label="Turn left">↶</button><button type="button" data-walk="forward" aria-label="Move forward">↑</button><button type="button" data-walk="right" aria-label="Turn right">↷</button><button type="button" data-walk="strafeLeft" aria-label="Step left">←</button><button type="button" data-walk="back" aria-label="Move backward">↓</button><button type="button" data-walk="strafeRight" aria-label="Step right">→</button></div><small>Hold arrows to keep moving. Drag to look. W/S move, A/D turn, Q/E sidestep.</small></div>
             <div class="model-floor-list" id="modelFloorList"></div>
           </div>
         </div>
@@ -141,6 +141,7 @@
   <script src="project-store.js?v=update1"></script>
   <script src="mesh-import.js?v=update3"></script>
   <script src="depth-render.js?v=walkfix1"></script>
-  <script src="app.js?v=walkfix3"></script>
+  <script src="walk-navigation.js?v=doorfix1"></script>
+  <script src="app.js?v=doorfix1"></script>
 </body>
 </html>
