@@ -821,6 +821,9 @@
   function occupiedInWalk(x,y,clearance){
     return floor().items.some(e=>{
       if(e.type!=='furniture'||['stairs','elevator'].includes(e.subType))return false;
+      // The camera is at eye height: a sofa or bed should not force the
+      // viewpoint against the wall. Only full-height fixtures block it.
+      if((e.subType==='custom'?Number(e.height)||3:3)<4.5)return false;
       const centerX=e.x+e.w/2,centerY=e.y+e.h/2,angle=-(e.rotation||0)*Math.PI/180;
       const dx=x-centerX,dy=y-centerY;
       const localX=dx*Math.cos(angle)-dy*Math.sin(angle),localY=dx*Math.sin(angle)+dy*Math.cos(angle);
@@ -837,7 +840,13 @@
         .find(p=>p.x>start.x+.7&&p.x<start.x+start.w-.7&&p.y>start.y+.7&&p.y<start.y+start.h-.7&&!occupiedInWalk(p.x,p.y,.75));
       if(safe){x=safe.x;y=safe.y}
     }
-    walk={x,y,z:5.1,yaw:0,pitch:0};
+    const nearEdge=(p,r)=>p.x>=r.x-.35&&p.x<=r.x+r.w+.35&&p.y>=r.y-.35&&p.y<=r.y+r.h+.35&&
+      (Math.abs(p.x-r.x)<.4||Math.abs(p.x-r.x-r.w)<.4||Math.abs(p.y-r.y)<.4||Math.abs(p.y-r.y-r.h)<.4);
+    const openings=start?floor().items.filter(e=>(e.type==='window'||e.type==='door')&&nearEdge(e,start)):[];
+    const focus=openings.find(e=>e.type==='window')||openings[0];
+    // Aim toward an opening where possible, otherwise toward a corner.
+    const lookX=focus?.x??(start?.x??x-5),lookY=focus?.y??(start?.y??y-5);
+    walk={x,y,z:5.1,yaw:Math.atan2(lookY-y,lookX-x),pitch:-.12};
     $('walkFloor').innerHTML=project.floors.map(f=>`<option value="${esc(f.id)}" ${f.id===project.activeFloorId?'selected':''}>${esc(f.name)}</option>`).join('');
   }
   function enterWalk(){
