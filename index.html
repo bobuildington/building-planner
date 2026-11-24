@@ -12,7 +12,7 @@
   <meta name="description" content="Create and edit beautiful, measurable home floor plans in your browser.">
   <title>HousePlan Studio — Floor Plan Editor</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="mobile.css?v=update1">
+  <link rel="stylesheet" href="mobile.css?v=update2">
 </head>
 <body>
   <div class="app-shell">
@@ -83,9 +83,13 @@
             </defs>
             <rect x="-3000" y="-3000" width="6000" height="6000" fill="#fbfcfa" />
             <rect x="-3000" y="-3000" width="6000" height="6000" fill="url(#largeGrid)" id="gridLayer"/>
-            <g id="drawing"></g><g id="underlayLayer" pointer-events="none"></g><g id="tempDrawing"></g><g id="snapGuideLayer" pointer-events="none"></g><g id="interactionLayer"></g>
+            <g id="drawing"></g><g id="underlayLayer" pointer-events="none"></g><g id="connectionsLayer" pointer-events="none"></g><g id="tempDrawing"></g><g id="snapGuideLayer" pointer-events="none"></g><g id="interactionLayer"></g>
           </svg>
-          <button id="underlayToggle" class="underlay-toggle hidden" type="button" aria-pressed="true" title="Show the outline of the floor immediately below">▧ <span id="underlayText">Floor below: On</span></button>
+          <div class="floor-guides hidden" id="floorGuides" role="group" aria-label="Floor alignment tools">
+            <button id="underlayToggle" class="underlay-toggle" type="button" aria-pressed="true" title="Show the outline of the floor immediately below">▧ <span id="underlayText">Below: On</span></button>
+            <button id="alignBelowToggle" type="button" aria-pressed="true" title="Magnetically align to the floor below">⌖ <span id="alignBelowText">Align below: On</span></button>
+            <button id="traceBelowBtn" type="button" title="Copy room outlines from the floor below">▣ Trace rooms</button>
+          </div>
           <div id="selectionToolbar" class="selection-toolbar hidden" role="toolbar" aria-label="Selected object actions"><button id="quickEdit" title="Edit dimensions">✎ <span>Edit</span></button><button id="quickDuplicate" title="Duplicate selected item">▣ <span>Copy</span></button><button id="quickRotate" title="Rotate object 90 degrees">↻ <span>Rotate</span></button><button id="quickDelete" class="danger" title="Delete selected item">× <span>Delete</span></button></div>
           <div class="canvas-hint" id="canvasHint">Click an object to edit its dimensions</div>
           <div class="zoom-controls"><button id="zoomOut" aria-label="Zoom out">−</button><span id="zoomText">100%</span><button id="zoomIn" aria-label="Zoom in">+</button><button id="fitBtn" class="fit-btn" title="Fit drawing to view" aria-label="Fit drawing">⛶</button></div>
@@ -125,8 +129,8 @@
   </div>
   <input type="file" id="fileInput" accept=".json,application/json" hidden>
   <div id="toast" role="status" aria-live="polite"></div>
-  <script src="geometry.js?v=update1"></script>
+  <script src="geometry.js?v=update2"></script>
   <script src="project-store.js?v=update1"></script>
-  <script src="app.js?v=update1"></script>
+  <script src="app.js?v=update2"></script>
 </body>
 </html>

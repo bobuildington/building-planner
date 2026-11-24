@@ -95,5 +95,54 @@
       y:precision(by?box.y+by.delta:grid(box.y,gridStep)),
       guideX:bx?.guide??null,guideY:by?.guide??null};
   }
-  return {collectWallSegments,alignmentGuides,magnetPoint,magnetBox};
+  // Split each merged wall around door/window apertures. A single opening can
+  // span two segments at a T-junction; matching by line, not by segment ID,
+  // avoids accidentally filling half of that opening.
+  function wallSections(items,wallHeight=8){
+    return collectWallSegments(items).map(wall=>{
+      const length=Math.hypot(wall.x2-wall.x1,wall.y2-wall.y1);
+      const ux=(wall.x2-wall.x1)/length,uy=(wall.y2-wall.y1)/length;
+      const openings=items.filter(e=>e.type==='door'||e.type==='window').flatMap(e=>{
+        if(![e.x,e.y,e.width].every(Number.isFinite)||e.width<=0)return [];
+        const a=(e.angle||0)*Math.PI/180;
+        if(Math.abs(Math.cos(a)*ux+Math.sin(a)*uy)<.96)return [];
+        const off=Math.abs((e.x-wall.x1)*(-uy)+(e.y-wall.y1)*ux);
+        if(off>.48)return [];
+        const center=(e.x-wall.x1)*ux+(e.y-wall.y1)*uy;
+        const start=Math.max(0,center-e.width/2),end=Math.min(length,center+e.width/2);
+        if(end-start<.01)return [];
+        return [{id:e.id,type:e.type,start,end,width:e.width,center,
+          bottom:e.type==='door'?0:3,top:e.type==='door'?Math.min(wallHeight,6.8):Math.min(wallHeight,6.5)}];
+      });
+      const cuts=[...new Set([0,length,...openings.flatMap(o=>[o.start,o.end]).map(precision)])].sort((a,b)=>a-b);
+      const sections=[];
+      for(let i=0;i<cuts.length-1;i++){
+        const start=cuts[i],end=cuts[i+1],mid=(start+end)/2;
+        if(end-start<.001)continue;
+        const blocked=openings.filter(o=>o.start<mid&&o.end>mid).map(o=>[o.bottom,o.top]).sort((a,b)=>a[0]-b[0]);
+        let bottom=0;
+        for(const [lo,hi] of blocked){
+          if(lo>bottom+.001)sections.push({start,end,bottom,top:lo});
+          bottom=Math.max(bottom,hi);
+        }
+        if(bottom<wallHeight-.001)sections.push({start,end,bottom,top:wallHeight});
+      }
+      return {...wall,length,ux,uy,openings,sections};
+    });
+  }
+  function connectionSpan(floors,sourceIndex,fixture){
+    const last=floors.length-1;
+    if(fixture?.subType==='elevator'&&fixture.throughAll!==false)return last;
+    return Math.min(last,sourceIndex+1);
+  }
+  function connectionsAt(floors,targetIndex){
+    if(targetIndex<=0)return [];
+    const found=[];
+    for(let i=0;i<targetIndex;i++)for(const e of floors[i].items){
+      if(e.type!=='furniture'||!['stairs','elevator'].includes(e.subType))continue;
+      if(targetIndex<=connectionSpan(floors,i,e))found.push({sourceIndex:i,fixture:e});
+    }
+    return found;
+  }
+  return {collectWallSegments,alignmentGuides,magnetPoint,magnetBox,wallSections,connectionSpan,connectionsAt};
 });

@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
-  const svg = $('plan'), drawing = $('drawing'), underlay = $('underlayLayer'), tempDrawing = $('tempDrawing'), handles = $('interactionLayer');
+  const svg = $('plan'), drawing = $('drawing'), underlay = $('underlayLayer'), connectionsLayer=$('connectionsLayer'), tempDrawing = $('tempDrawing'), handles = $('interactionLayer');
   const snapGuides=$('snapGuideLayer'), geometry=window.HouseGeometry;
   const modelCanvas = $('modelCanvas'), ctx3d = modelCanvas.getContext('2d');
   let uid = 100;
@@ -16,7 +16,7 @@
   const safeColor = color => /^#[0-9a-f]{6}$/i.test(color||'')?color:'#b5bfa7';
   const objectName = e => e.type==='furniture'?(e.subType==='custom'?e.name||'Custom object':names[e.subType]||'Object'):e.type[0].toUpperCase()+e.type.slice(1);
   const room=(x,y,w,h,name)=>({id:id(),type:'room',x,y,w,h,name});
-  const furniture=(subType,x,y,extra={})=>({id:id(),type:'furniture',subType,x,y,w:sizes[subType]?.[0]||4,h:sizes[subType]?.[1]||3,rotation:0,...extra});
+  const furniture=(subType,x,y,extra={})=>({id:id(),type:'furniture',subType,x,y,w:sizes[subType]?.[0]||4,h:sizes[subType]?.[1]||3,rotation:0,...(subType==='elevator'?{throughAll:true}:{}),...extra});
   const opening=(type,x,y,angle,width)=>({id:id(),type,x,y,angle,width});
   const sample=()=>{
     const ground={id:id(),name:'Ground floor',items:[
@@ -46,7 +46,7 @@
   project.viewMode='2d';
   const floor=()=>project.floors.find(f=>f.id===project.activeFloorId)||project.floors[0];
   let selected=null, activeTool='select', furnitureTool=null, currentTab='properties';
-  let showUnderlay=true,magnetEnabled=true;
+  let showUnderlay=true,alignBelow=true,magnetEnabled=true;
   let snapEnabled=true, pointer=null, draft=null, history=[], future=[], saveTimer=null;
   let sheetOpen=false;
   const isMobile=()=>matchMedia('(max-width: 840px)').matches;
@@ -77,11 +77,16 @@
   function setStatus(message){$('statusMessage').textContent=message}
   function snap(v){return snapEnabled?Math.round(v*2)/2:round(v)}
   function snapTolerance(){return Math.min(1.65,Math.max(.18,viewSize().w/Math.max(svg.clientWidth,1)*13))}
+  function activeFloorIndex(){return project.floors.findIndex(f=>f.id===project.activeFloorId)}
+  function alignmentItems(){
+    const i=activeFloorIndex(),items=floor().items;
+    return i>0&&alignBelow?[...items,...project.floors[i-1].items.filter(e=>e.type==='room'||e.type==='wall')]:items;
+  }
   function snapPoint(raw,exclude=null){
-    return magnetEnabled?geometry.magnetPoint(raw,floor().items,snapTolerance(),snapEnabled?.5:.1,exclude):{x:snap(raw.x),y:snap(raw.y),guideX:null,guideY:null};
+    return magnetEnabled?geometry.magnetPoint(raw,alignmentItems(),snapTolerance(),snapEnabled?.5:.1,exclude):{x:snap(raw.x),y:snap(raw.y),guideX:null,guideY:null};
   }
   function snapBox(box,exclude=null){
-    return magnetEnabled?geometry.magnetBox(box,floor().items,snapTolerance(),snapEnabled?.5:.1,exclude):{x:snap(box.x),y:snap(box.y),guideX:null,guideY:null};
+    return magnetEnabled?geometry.magnetBox(box,alignmentItems(),snapTolerance(),snapEnabled?.5:.1,exclude):{x:snap(box.x),y:snap(box.y),guideX:null,guideY:null};
   }
   function showSnapGuides(match){
     if(!match||match.guideX===null&&match.guideY===null){snapGuides.innerHTML='';return}
@@ -167,7 +172,7 @@
   function showMeasure(e){return `<g data-id="${e.id}"><line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="#bb9076" stroke-width=".09" stroke-dasharray=".28 .16"/><circle cx="${e.x1}" cy="${e.y1}" r=".15" fill="#bb9076"/><circle cx="${e.x2}" cy="${e.y2}" r=".15" fill="#bb9076"/>${svgText(nice(Math.hypot(e.x2-e.x1,e.y2-e.y1))+' ft',(e.x1+e.x2)/2,(e.y1+e.y2)/2-.55,.67,'#ad7856')}</g>`}
   const showItem = e => e.type==='room'?showRoom(e):e.type==='wall'?showWall(e):e.type==='door'||e.type==='window'?showOpening(e):e.type==='furniture'?showFurniture(e):e.type==='label'?showLabel(e):e.type==='measure'?showMeasure(e):'';
   function renderUnderlay(){
-    const i=project.floors.findIndex(f=>f.id===project.activeFloorId);
+    const i=activeFloorIndex();
     const enabled=showUnderlay&&i>0&&project.viewMode==='2d';
     underlay.innerHTML=enabled?project.floors[i-1].items.map(e=>{
       if(e.type==='room')return `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="none" stroke="#3387a7" stroke-width=".2" stroke-dasharray=".6 .3"/>`;
@@ -175,6 +180,14 @@
       if(e.type==='furniture'&&['stairs','elevator'].includes(e.subType))return `<g transform="translate(${e.x} ${e.y}) rotate(${e.rotation||0} ${e.w/2} ${e.h/2})"><rect width="${e.w}" height="${e.h}" fill="#7eb8c1" fill-opacity=".13" stroke="#3387a7" stroke-width=".22" stroke-dasharray=".35 .2"/></g>`;
       return '';
     }).join(''):'';
+    renderVerticalConnections();
+  }
+  function renderVerticalConnections(){
+    if(project.viewMode!=='2d'){connectionsLayer.innerHTML='';return}
+    connectionsLayer.innerHTML=geometry.connectionsAt(project.floors,activeFloorIndex()).map(({fixture:e})=>{
+      const isElevator=e.subType==='elevator',label=isElevator?'LIFT SHAFT':'STAIR OPENING';
+      return `<g transform="translate(${e.x} ${e.y}) rotate(${e.rotation||0} ${e.w/2} ${e.h/2})"><rect width="${e.w}" height="${e.h}" fill="${isElevator?'#83c2ce':'#e5b980'}" fill-opacity=".18" stroke="${isElevator?'#408c99':'#af7b3e'}" stroke-width=".19" stroke-dasharray=".4 .22"/>${svgText(label,e.w/2,e.h/2,Math.min(.7,e.w/9),'#6c6d5a','font-weight="700"')}</g>`;
+    }).join('');
   }
   function renderPrefabPalette(){
     document.querySelectorAll('#furniturePalette [data-prefab-id]').forEach(el=>el.remove());
@@ -207,10 +220,12 @@
     $('threeDStage').classList.toggle('hidden',project.viewMode!=='3d');
     $('snapLabel').style.display=project.viewMode==='3d'?'none':'';
     $('canvasHint').style.display=project.viewMode==='3d'?'none':'';
-    const canUnderlay=project.viewMode==='2d'&&project.floors.findIndex(f=>f.id===project.activeFloorId)>0;
-    $('underlayToggle').classList.toggle('hidden',!canUnderlay);
+    const canUnderlay=project.viewMode==='2d'&&activeFloorIndex()>0;
+    $('floorGuides').classList.toggle('hidden',!canUnderlay);
     $('underlayToggle').setAttribute('aria-pressed',String(showUnderlay));
-    $('underlayText').textContent='Floor below: '+(showUnderlay?'On':'Off');
+    $('underlayText').textContent='Below: '+(showUnderlay?'On':'Off');
+    $('alignBelowToggle').setAttribute('aria-pressed',String(alignBelow));
+    $('alignBelowText').textContent='Align below: '+(alignBelow?'On':'Off');
     document.querySelector('.three-d-help').textContent=isMobile()?'Drag to rotate · Pinch to zoom':'Drag to rotate · Scroll to zoom';
     $('zoomText').textContent=Math.round(camera.zoom*100)+'%';
     if(project.viewMode==='3d')render3D();
@@ -236,6 +251,7 @@
       fields+=`<div class="field-row">${numberField('x','X position (ft)',e.x)}${numberField('y','Y position (ft)',e.y)}</div>`;
       if(e.type!=='label')fields+=`<div class="field-row">${numberField('w','Width (ft)',e.w)}${numberField('h','Depth (ft)',e.h)}</div>`;
       if(e.subType==='custom')fields+=numberField('height','3D height (ft)',e.height||3);
+      if(e.subType==='elevator')fields+=`<div class="field-group"><label class="field-label" for="fld-throughAll">Elevator shaft connects</label><select id="fld-throughAll" class="field-input" data-field="throughAll"><option value="all" ${e.throughAll!==false?'selected':''}>All floors above</option><option value="next" ${e.throughAll===false?'selected':''}>Next floor only</option></select><p class="inspector-copy">The shaft and floor openings follow this choice in 3D.</p></div>`;
     }else if(e.type==='door'||e.type==='window'){
       fields+=`<div class="field-row">${numberField('x','X (ft)',e.x)}${numberField('y','Y (ft)',e.y)}</div>${numberField('width','Opening width (ft)',e.width)}${numberField('angle','Wall angle (degrees)',e.angle,1)}`;
     }else{
@@ -455,6 +471,16 @@
   $('snapCheck').addEventListener('change',e=>{snapEnabled=e.target.checked;setStatus(snapEnabled?'Snap to half-foot grid enabled':'Freehand positioning enabled')});
   $('magnetToggle').addEventListener('click',()=>{magnetEnabled=!magnetEnabled;showSnapGuides(null);render();toast(magnetEnabled?'Magnetic wall alignment enabled':'Magnetic wall alignment disabled')});
   $('underlayToggle').addEventListener('click',()=>{showUnderlay=!showUnderlay;renderPlan();renderFloorTabs()});
+  $('alignBelowToggle').addEventListener('click',()=>{alignBelow=!alignBelow;renderFloorTabs();toast(alignBelow?'Aligning to the floor below':'Lower-floor alignment off')});
+  $('traceBelowBtn').addEventListener('click',()=>{
+    const i=activeFloorIndex();if(i<=0)return;
+    const existing=floor().items,lower=project.floors[i-1].items;
+    const same=(a,b)=>a.type===b.type&&(a.type==='room'?['x','y','w','h'].every(k=>Math.abs(a[k]-b[k])<.01):['x1','y1','x2','y2'].every(k=>Math.abs(a[k]-b[k])<.01));
+    const copied=lower.filter(e=>e.type==='room'||e.type==='wall').filter(e=>!existing.some(v=>same(e,v))).map(e=>({...clone(e),id:id()}));
+    if(!copied.length){toast('All lower-floor rooms are already traced');return}
+    const before=state();floor().items.push(...copied);selected=null;changed(before);
+    toast('Traced '+copied.length+' rooms and walls — Undo to revert');
+  });
   document.querySelectorAll('.right-tab').forEach(b=>b.addEventListener('click',()=>{currentTab=b.dataset.tab;sheetOpen=true;render()}));
   $('propertiesContent').addEventListener('change',evt=>{
     const input=evt.target.closest('[data-field]');if(!input)return;
@@ -463,6 +489,7 @@
     else{
       const e=itemById(selected);if(!e)return;
       if(['name','text'].includes(key))e[key]=input.value.trim()||e[key];
+      else if(key==='throughAll')e.throughAll=input.value==='all';
       else{const v=Number(input.value);if(!Number.isFinite(v))return;let n=round(v);if(['w','h','width','height'].includes(key))n=clamp(n,.5,key==='height'?30:100);e[key]=n}
     }
     changed(before);
@@ -591,8 +618,21 @@
       });
       add(top,fill,stroke,width,kind);
     };
-    const vertical=(a,b,z,height,fill)=>{
-      add([[...a,z],[...b,z],[...b,z+height],[...a,z+height]],fill,'#729284',.65,'wall');
+    // A wall is a thin solid with two faces and jambs. Sections above/below
+    // apertures are the only solids drawn, leaving actual see-through holes.
+    const wallPiece=(wall,span,z,shared)=>{
+      const a=[wall.x1+wall.ux*span.start,wall.y1+wall.uy*span.start];
+      const b=[wall.x1+wall.ux*span.end,wall.y1+wall.uy*span.end];
+      const nx=-wall.uy*.17,ny=wall.ux*.17,lo=z+span.bottom,hi=z+span.top;
+      const a1=[a[0]+nx,a[1]+ny],b1=[b[0]+nx,b[1]+ny];
+      const a2=[a[0]-nx,a[1]-ny],b2=[b[0]-nx,b[1]-ny];
+      const alpha=shared?'.36':'.46';
+      add([[...a1,lo],[...b1,lo],[...b1,hi],[...a1,hi]],`rgba(139,183,157,${alpha})`,'#779b84',.42,'wall');
+      add([[...b2,lo],[...a2,lo],[...a2,hi],[...b2,hi]],'rgba(180,207,187,.40)','#8cab95',.4,'wall');
+      add([[...a2,lo],[...a1,lo],[...a1,hi],[...a2,hi]],'rgba(150,183,163,.58)','#7d9c87',.35,'jamb');
+      add([[...b1,lo],[...b2,lo],[...b2,hi],[...b1,hi]],'rgba(150,183,163,.58)','#7d9c87',.35,'jamb');
+      add([[...a1,hi],[...b1,hi],[...b2,hi],[...a2,hi]],span.top>=7.999?'#779e86':'#b2c8b5','#7e9b86',.42,'wall-top');
+      if(span.bottom>.01)add([[...a2,lo],[...b2,lo],[...b1,lo],[...a1,lo]],'#b7cabc','#85a28c',.4,'wall-sill');
     };
     const rotatedCorners=(e,x=e.x,y=e.y,w=e.w,h=e.h)=>{
       const angle=(e.rotation||0)*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),mx=e.x+e.w/2,my=e.y+e.h/2;
@@ -621,18 +661,29 @@
     const palette=['#e4f0e3','#e8eee2','#e4edf0','#eee9e0','#eff0e4','#e6efe7','#e5edf1'];
     visible.forEach(f=>{
       const i=project.floors.findIndex(l=>l.id===f.id),z=(showAll?i:0)*floorSpacing;
-      const holes=i>0?project.floors[i-1].items.filter(e=>e.type==='furniture'&&['stairs','elevator'].includes(e.subType)).map(e=>{
+      const holes=geometry.connectionsAt(project.floors,i).map(({fixture:e})=>{
         const points=rotatedCorners(e),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
         const x=Math.min(...xs),y=Math.min(...ys);
         return {x,y,w:Math.max(...xs)-x,h:Math.max(...ys)-y};
-      }):[];
-      // The same merged walls used in 2D also drive the 3D faces. Adjacent
-      // rooms never generate coincident wall faces or overlapping top rails.
-      for(const s of geometry.collectWallSegments(f.items)){
-        const a=[s.x1,s.y1],b=[s.x2,s.y2],len=Math.hypot(s.x2-s.x1,s.y2-s.y1);
-        vertical(a,b,z,8,s.roomIds.length>1?'rgba(146,181,157,.54)':'rgba(163,195,174,.62)');
-        const half=.18,ox=-(s.y2-s.y1)/len*half,oy=(s.x2-s.x1)/len*half;
-        add([[s.x1+ox,s.y1+oy,z+8],[s.x2+ox,s.y2+oy,z+8],[s.x2-ox,s.y2-oy,z+8],[s.x1-ox,s.y1-oy,z+8]],'#779e86','#618772',.5,'top');
+      });
+      // Every opening cuts the wall mesh itself. This also works when a door
+      // crosses a T-junction splitting one wall into multiple unique segments.
+      const doorLeaves=new Set();
+      for(const wall of geometry.wallSections(f.items,8)){
+        wall.sections.forEach(section=>wallPiece(wall,section,z,wall.roomIds.length>1));
+        for(const opening of wall.openings){
+          const point=t=>[wall.x1+wall.ux*t,wall.y1+wall.uy*t];
+          const a=point(opening.start),b=point(opening.end);
+          if(opening.type==='window'){
+            add([[...a,z+opening.bottom],[...b,z+opening.bottom],[...b,z+opening.top],[...a,z+opening.top]],'rgba(117,198,213,.46)','#408b9a',1.3,'glass');
+          }else if(!doorLeaves.has(opening.id)){
+            doorLeaves.add(opening.id);
+            const hinge=point(opening.center-opening.width/2);
+            const swing=opening.width*.87,dx=wall.ux*.46-wall.uy*.89,dy=wall.uy*.46+wall.ux*.89;
+            const end=[hinge[0]+dx*swing,hinge[1]+dy*swing];
+            add([[...hinge,z+.08],[...end,z+.08],[...end,z+6.55],[...hinge,z+6.55]],'rgba(207,170,123,.65)','#9f7951',.9,'door-leaf');
+          }
+        }
       }
       f.items.forEach((e,k)=>{
         if(e.type==='room'){
@@ -647,20 +698,18 @@
             for(let step=0;step<steps;step++)cuboid(rotatedCorners(e,x,y+h*step/steps,w,h/steps),z+.1,(step+1)*rise,'#c8b9a0','#8b9986','stairs',.6);
           }else if(e.subType==='elevator'){
             const corners=rotatedCorners(e);
+            const endFloor=geometry.connectionSpan(project.floors,i,e);
+            const shaftHeight=showAll?Math.max(8,(endFloor-i)*floorSpacing):8;
             cuboid(corners,z+.1,.35,'#b9d7d7','#568a91','elevator',.65);
             for(let side=0;side<4;side++){
               const a=corners[side],b=corners[(side+1)%4];
-              add([[...a,z+.45],[...b,z+.45],[...b,z+floorSpacing],[...a,z+floorSpacing]],'rgba(111,169,179,.31)','#568c97',.9,'elevator-shaft');
+              add([[...a,z+.45],[...b,z+.45],[...b,z+shaftHeight],[...a,z+shaftHeight]],'rgba(111,169,179,.25)','#568c97',.75,'elevator-shaft');
             }
           }else{
             const hz=e.subType==='custom'?clamp(Number(e.height)||3,.5,30):e.subType==='plant'?2.7:e.subType==='bed'||e.subType==='sofa'?2:2.8;
             const topColor=e.subType==='custom'?safeColor(e.color):e.subType==='plant'?'#719b71':e.subType==='table'||e.subType==='desk'?'#cfae88':e.subType==='bed'?'#eff5e9':'#a2bda7';
             cuboid(rotatedCorners(e),z+.1,hz,topColor,'#6e9680','furniture');
           }
-        }else if(e.type==='window'||e.type==='door'){
-          const a=(e.angle||0)*Math.PI/180,dx=Math.cos(a)*e.width/2,dy=Math.sin(a)*e.width/2;
-          const z0=z+(e.type==='window'?3:0),z1=z+(e.type==='window'?6.5:6.8);
-          add([[e.x-dx,e.y-dy,z0],[e.x+dx,e.y+dy,z0],[e.x+dx,e.y+dy,z1],[e.x-dx,e.y-dy,z1]],e.type==='window'?'rgba(127,194,203,.91)':'rgba(219,186,144,.85)',e.type==='window'?'#398e9d':'#9f784e',1.2,'opening');
         }
       });
     });

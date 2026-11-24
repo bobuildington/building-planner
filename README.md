@@ -7,11 +7,13 @@ A free, mobile-first, installable home floor-plan editor. Everything runs in you
 - Draw, select, resize, name, and measure rooms and walls on a feet-based grid.
 - Align room corners and wall endpoints with magnetic guides; toggle **Align** to disable it. Adjacent rooms share one generated wall outline and one 3D wall face rather than overlapping copies.
 - Place doors, windows, labels, and furniture.
+- Doors and windows cut real openings in the 3D wall mesh. Windows show a sill, lintel, and translucent glass; doors show a walk-through gap and an angled door leaf.
 - Place stairs and elevator shafts. They span toward the next level in 3D, with a matching opening in the floor slab above.
+- Elevator shafts can extend through **all floors above** or just the **next floor** (choose in the elevator's Properties). Upper-floor 2D plans show non-editable shaft and stairwell opening guides.
 - Create, rename, duplicate, and switch between floors.
-- On upper floors, toggle a dashed blue outline of the floor directly below to align rooms and vertical connections.
+- On upper floors, toggle a dashed blue outline of the floor below, magnetically **Align below**, or tap **Trace rooms** to copy missing room/wall outlines as editable elements. Trace never removes the existing layout and can be undone.
 - Create named prefab objects with custom width, depth, height, and color. Reuse them from the Objects palette; templates are included in editable JSON exports.
-- See all floors in an interactive 3D building model. Rotate, zoom, separate levels, or isolate one floor.
+- See all floors in an interactive 3D building model with thicker wall faces, framed wall openings, and connected vertical shafts. Rotate, zoom, separate levels, or isolate one floor.
 - Phone controls: bottom drawing toolbar, scrolling Objects palette, expandable properties sheet, larger touch handles, one-tap Edit / Copy / Rotate / Delete actions, two-finger pan/zoom, and 3D pinch zoom.
 - Create as many separate house projects as local storage allows. Open **Projects / My projects** to switch, duplicate, recover an earlier save, or delete a design. Importing a project creates a new saved copy.
 - Download an all-project JSON backup from **My projects → Back up all**. Restore it later without deleting existing projects.

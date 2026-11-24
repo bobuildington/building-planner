@@ -1,8 +1,12 @@
 /* Phone-first interactions. Desktop keeps the original full studio layout. */
 .mobile-only { display: none; }
-.underlay-toggle { position:absolute; z-index:3; top:12px; left:12px; min-height:36px; border:1px solid #a7c6d3; border-radius:9px; background:#f4fbffed; color:#376d82; box-shadow:0 3px 13px #163e4a19; padding:7px 11px; font-size:11px; font-weight:750; }
+.floor-guides { position:absolute; z-index:4; top:10px; left:10px; display:flex; gap:5px; max-width:calc(100% - 20px); overflow-x:auto; padding:2px; scrollbar-width:thin; }
+.floor-guides.hidden { display:none; }
+.floor-guides button { flex:0 0 auto; min-height:36px; border:1px solid #b7d3c2; border-radius:9px; background:#f6fbf7ef; color:#376e55; box-shadow:0 3px 13px #163e4a19; padding:7px 11px; font-size:11px; font-weight:750; white-space:nowrap; }
+.floor-guides button[aria-pressed="false"] { background:#fff; color:#80978b; border-color:#dce9e5; }
+.floor-guides .underlay-toggle { border-color:#a7c6d3; background:#f4fbffed; color:#376d82; }
 .underlay-toggle[aria-pressed="false"] { background:#fff; border-color:#dce9e5; color:#78958b; }
-.underlay-toggle.hidden,.prefab-dialog.hidden { display:none; }
+.prefab-dialog.hidden { display:none; }
 .furniture-grid .new-prefab-button { border:1px dashed #7bac95; color:#286e4e; background:#f0f9f2; }
 .furniture-grid [data-prefab-id] { overflow:hidden; overflow-wrap:anywhere; line-height:1.2; }
 .prefab-dialog { position:fixed; z-index:60; inset:0; display:grid; place-items:center; overflow-y:auto; padding:20px; background:#142e248f; }
@@ -204,7 +208,8 @@
   .three-d-controls button { min-height: 30px; }
   .model-floor-list { top: 10px; right: 8px; }
   .model-floor-tag { max-width: 121px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
-  .underlay-toggle { top:8px; left:8px; min-height:37px; padding:8px; font-size:10px; }
+  .floor-guides { top:7px; left:7px; gap:3px; max-width:calc(100% - 14px); }
+  .floor-guides button { min-height:36px; padding:7px 8px; font-size:10px; }
   .selection-toolbar { top:48px; right:7px; padding:3px; gap:3px; }
   .selection-toolbar button { min-width:39px; min-height:39px; font-size:17px; padding:4px; }
   .selection-toolbar button span { display:none; }
