@@ -4,6 +4,7 @@
   const svg = $('plan'), drawing = $('drawing'), underlay = $('underlayLayer'), connectionsLayer=$('connectionsLayer'), tempDrawing = $('tempDrawing'), handles = $('interactionLayer');
   const snapGuides=$('snapGuideLayer'), geometry=window.HouseGeometry;
   const modelCanvas = $('modelCanvas'), ctx3d = modelCanvas.getContext('2d');
+  const walkCanvas=document.createElement('canvas'),walkContext=walkCanvas.getContext('2d');
   let uid = 100;
   const id = () => 'p' + Date.now().toString(36) + (uid++).toString(36);
   const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -650,7 +651,7 @@
     };
     const polys=[];
     const add=(points,fill,stroke='#739586',width=1,kind='face')=>{
-      const pts=cameraMode==='walk'?clipNear(points.map(p=>walkthroughPoint(...p))).map(p=>({x:cw/2+p.x*Math.min(cw,ch)*.96/p.depth,y:ch/2-p.y*Math.min(cw,ch)*.96/p.depth,depth:p.depth})):points.map(p=>projectP(...p));
+      const pts=cameraMode==='walk'?clipNear(points.map(p=>walkthroughPoint(...p))).map(p=>({x:cw/2+p.x*Math.min(cw,ch)*.74/p.depth,y:ch/2-p.y*Math.min(cw,ch)*.74/p.depth,depth:p.depth})):points.map(p=>projectP(...p));
       if(pts.length<3)return;
       polys.push({pts,fill,stroke,width,depth:pts.reduce((s,p)=>s+p.depth,0)/pts.length,kind});
     };
@@ -792,20 +793,51 @@
         }
       });
     });
-    polys.sort((a,b)=>b.depth-a.depth);
-    ctx3d.lineJoin='round';
-    for(const p of polys){
-      ctx3d.beginPath();
-      p.pts.forEach((v,i)=>i?ctx3d.lineTo(v.x,v.y):ctx3d.moveTo(v.x,v.y));
-      ctx3d.closePath();ctx3d.fillStyle=p.fill;ctx3d.fill();
-      ctx3d.strokeStyle=p.stroke;ctx3d.lineWidth=p.width;ctx3d.stroke();
+    if(cameraMode==='walk'&&walkContext&&window.HouseDepthRender){
+      // Limit indoor software-rendering resolution for low-powered phones.
+      // Depth testing resolves every pixel, including surfaces that intersect
+      // in screen space; average polygon sorting cannot do that reliably.
+      const factor=Math.min(1,740/Math.max(cw,ch));
+      const rw=Math.max(1,Math.round(cw*factor)),rh=Math.max(1,Math.round(ch*factor));
+      if(walkCanvas.width!==rw)walkCanvas.width=rw;
+      if(walkCanvas.height!==rh)walkCanvas.height=rh;
+      const frame=walkContext.createImageData(rw,rh);
+      frame.data.set(window.HouseDepthRender.rasterize(polys,rw,rh,rw/cw,rh/ch));
+      walkContext.putImageData(frame,0,0);
+      ctx3d.imageSmoothingEnabled=true;
+      ctx3d.drawImage(walkCanvas,0,0,cw,ch);
+    }else{
+      polys.sort((a,b)=>b.depth-a.depth);
+      ctx3d.lineJoin='round';
+      for(const p of polys){
+        ctx3d.beginPath();
+        p.pts.forEach((v,i)=>i?ctx3d.lineTo(v.x,v.y):ctx3d.moveTo(v.x,v.y));
+        ctx3d.closePath();ctx3d.fillStyle=p.fill;ctx3d.fill();
+        ctx3d.strokeStyle=p.stroke;ctx3d.lineWidth=p.width;ctx3d.stroke();
+      }
     }
     $('modelFloorList').innerHTML=visible.map(f=>`<span class="model-floor-tag">${esc(f.name)} · ${Math.round(area(f))} ft²</span>`).reverse().join('');
+  }
+  function occupiedInWalk(x,y,clearance){
+    return floor().items.some(e=>{
+      if(e.type!=='furniture'||['stairs','elevator'].includes(e.subType))return false;
+      const centerX=e.x+e.w/2,centerY=e.y+e.h/2,angle=-(e.rotation||0)*Math.PI/180;
+      const dx=x-centerX,dy=y-centerY;
+      const localX=dx*Math.cos(angle)-dy*Math.sin(angle),localY=dx*Math.sin(angle)+dy*Math.cos(angle);
+      return Math.abs(localX)<e.w/2+clearance&&Math.abs(localY)<e.h/2+clearance;
+    });
   }
   function resetWalk(){
     const rooms=floor().items.filter(e=>e.type==='room');
     const start=rooms[0];
-    walk={x:start?start.x+start.w/2:15,y:start?start.y+start.h/2:15,z:5.1,yaw:0,pitch:0};
+    let x=start?start.x+start.w/2:15,y=start?start.y+start.h/2:15;
+    if(start){
+      const offsets=[[0,0],[.2,.15],[-.2,.15],[.2,-.15],[-.2,-.15],[.3,0],[-.3,0],[0,.3],[0,-.3]];
+      const safe=offsets.map(([u,v])=>({x:start.x+start.w*(.5+u),y:start.y+start.h*(.5+v)}))
+        .find(p=>p.x>start.x+.7&&p.x<start.x+start.w-.7&&p.y>start.y+.7&&p.y<start.y+start.h-.7&&!occupiedInWalk(p.x,p.y,.75));
+      if(safe){x=safe.x;y=safe.y}
+    }
+    walk={x,y,z:5.1,yaw:0,pitch:0};
     $('walkFloor').innerHTML=project.floors.map(f=>`<option value="${esc(f.id)}" ${f.id===project.activeFloorId?'selected':''}>${esc(f.name)}</option>`).join('');
   }
   function enterWalk(){
@@ -823,9 +855,16 @@
       // Stay within the drawn floor footprint. For precise architectural
       // collision or door swinging, a full physics engine would be needed.
       const rooms=floor().items.filter(e=>e.type==='room');
-      if(!rooms.length||rooms.some(r=>x>=r.x+.2&&x<=r.x+r.w-.2&&y>=r.y+.2&&y<=r.y+r.h-.2)){walk.x=x;walk.y=y}
+      if((!rooms.length||rooms.some(r=>x>=r.x+.3&&x<=r.x+r.w-.3&&y>=r.y+.3&&y<=r.y+r.h-.3))&&!occupiedInWalk(x,y,.3)){walk.x=x;walk.y=y}
     }
     render3D();
+  }
+  let pendingWalkFrame=false;
+  function requestModelRender(){
+    if(cameraMode!=='walk'){render3D();return}
+    if(pendingWalkFrame)return;
+    pendingWalkFrame=true;
+    requestAnimationFrame(()=>{pendingWalkFrame=false;render3D()});
   }
   $('enterWalk').addEventListener('click',enterWalk);
   $('exitWalk').addEventListener('click',exitWalk);
@@ -848,7 +887,7 @@
     if(!spin)return;
     if(cameraMode==='walk'){walk.yaw=spin.theta-(e.clientX-spin.x)*.007;walk.pitch=clamp(spin.phi-(e.clientY-spin.y)*.006,-.6,.6)}
     else{orbit.theta=spin.theta+(e.clientX-spin.x)*.012;orbit.phi=clamp(spin.phi+(e.clientY-spin.y)*.009,.25,1.48)}
-    render3D();
+    requestModelRender();
   });
   const stopModelPointer=e=>{modelTouches.delete(e.pointerId);if(modelTouches.size<2)modelPinch=null;spin=null};
   modelCanvas.addEventListener('pointerup',stopModelPointer);
