@@ -602,8 +602,17 @@
     const bounds=[];
     // Fit to the actual highest walls, not an empty imaginary story above the
     // building. This uses more of a phone's limited 3D viewing area.
-    const highestWall=(showAll?(project.floors.length-1)*floorSpacing:0)+8;
-    for(const z of [-1,highestWall+2])for(const x of [ext.minX-3,ext.maxX+3])for(const y of [ext.minY-3,ext.maxY+3])bounds.push(transform(x,y,z));
+    const highestStructure=visible.reduce((highest,f)=>{
+      const i=project.floors.findIndex(l=>l.id===f.id),base=(showAll?i:0)*floorSpacing;
+      const extra=f.items.reduce((height,e)=>{
+        if(e.type!=='furniture')return height;
+        if(e.subType==='custom')return Math.max(height,clamp(Number(e.height)||3,.5,30));
+        if(e.subType==='elevator'&&showAll)return Math.max(height,(geometry.connectionSpan(project.floors,i,e)-i)*floorSpacing);
+        return height;
+      },8);
+      return Math.max(highest,base+extra);
+    },8);
+    for(const z of [-1,highestStructure+2])for(const x of [ext.minX-3,ext.maxX+3])for(const y of [ext.minY-3,ext.maxY+3])bounds.push(transform(x,y,z));
     const bw=Math.max(...bounds.map(p=>p.x))-Math.min(...bounds.map(p=>p.x));
     const bh=Math.max(...bounds.map(p=>p.y))-Math.min(...bounds.map(p=>p.y));
     const scale=Math.min(cw*.87/Math.max(15,bw),ch*.80/Math.max(18,bh))*orbit.zoom;
