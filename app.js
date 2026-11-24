@@ -1,0 +1,623 @@
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const svg = $('plan'), drawing = $('drawing'), tempDrawing = $('tempDrawing'), handles = $('interactionLayer');
+  const modelCanvas = $('modelCanvas'), ctx3d = modelCanvas.getContext('2d');
+  const STORAGE = 'houseplan-studio-project-v2';
+  let uid = 100;
+  const id = () => 'p' + Date.now().toString(36) + (uid++).toString(36);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const clone = x => JSON.parse(JSON.stringify(x));
+  const round = n => Math.round(n*10)/10;
+  const nice = n => String(Math.round(n*10)/10).replace(/\.0$/,'');
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const names = {sofa:'Sofa',bed:'Bed',table:'Dining table',desk:'Desk',sink:'Sink',toilet:'Toilet',stove:'Stove',plant:'Plant'};
+  const sizes = {sofa:[6,3],bed:[5,7],table:[5,4],desk:[4,2],sink:[2.5,2],toilet:[2,3],stove:[2.5,2.5],plant:[2,2]};
+  const room=(x,y,w,h,name)=>({id:id(),type:'room',x,y,w,h,name});
+  const furniture=(subType,x,y)=>({id:id(),type:'furniture',subType,x,y,w:sizes[subType][0],h:sizes[subType][1],rotation:0});
+  const opening=(type,x,y,angle,width)=>({id:id(),type,x,y,angle,width});
+  const sample=()=>{
+    const ground={id:id(),name:'Ground floor',items:[
+      room(7,7,17,12,'Living room'),room(24,7,12,12,'Kitchen'),
+      room(7,19,13,11,'Bedroom'),room(20,19,8,11,'Bathroom'),room(28,19,8,11,'Office'),
+      opening('door',15,7,0,3),opening('door',24,12,90,3),opening('door',13,19,0,3),
+      opening('door',23,19,0,2.5),opening('door',32,19,0,2.5),
+      opening('window',11,7,0,4),opening('window',32,7,0,4),opening('window',7,24,90,4),
+      furniture('sofa',9.5,10),furniture('table',29,11),furniture('bed',9,22),
+      furniture('sink',21,25),furniture('toilet',25,25),furniture('desk',30,23)
+    ]};
+    const upper={id:id(),name:'Second floor',items:[
+      room(7,7,16,12,'Primary bedroom'),room(23,7,13,12,'Bedroom 2'),
+      room(7,19,13,11,'Bathroom'),room(20,19,16,11,'Loft / lounge'),
+      opening('door',14,19,0,3),opening('door',28,19,0,3),
+      opening('window',12,7,0,4),opening('window',30,7,0,4),opening('window',36,23,90,4),
+      furniture('bed',10,10),furniture('bed',26,10),furniture('sink',10,23),
+      furniture('sofa',24,23),furniture('plant',32,25)
+    ]};
+    return {name:'The Evergreen House',floors:[ground,upper],activeFloorId:ground.id,viewMode:'2d'};
+  };
+  let project;
+  try {
+    const saved=JSON.parse(localStorage.getItem(STORAGE));
+    if(saved&&Array.isArray(saved.floors)&&saved.floors.length&&saved.floors.every(f=>Array.isArray(f.items)))project=saved;
+  }catch(e){}
+  project ||= sample();
+  if(!project.floors.some(f=>f.id===project.activeFloorId))project.activeFloorId=project.floors[0].id;
+  project.viewMode='2d';
+  const floor=()=>project.floors.find(f=>f.id===project.activeFloorId)||project.floors[0];
+  let selected=null, activeTool='select', furnitureTool=null, currentTab='properties';
+  let snapEnabled=true, pointer=null, draft=null, history=[], future=[], saveTimer=null;
+  let sheetOpen=false;
+  const isMobile=()=>matchMedia('(max-width: 840px)').matches;
+  const touchPoints=new Map();
+  let pinch=null;
+  let camera={cx:22,cy:18.5,zoom:1};
+  let orbit={theta:-0.73,phi:0.86,zoom:1};
+  let spin=null, showAll=true, showRoof=false, separateFloors=false;
+  let hintTimer=null;
+  let installPrompt=null;
+  addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e});
+  const state=()=>JSON.stringify(project);
+  function changed(previous){if(previous!==state()){history.push(previous);if(history.length>80)history.shift();future=[];save();render();return true}return false}
+  function save(){
+    $('saveState').textContent='● Saving…';
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(()=>{try{localStorage.setItem(STORAGE,JSON.stringify(project));$('saveState').textContent='● Saved locally'}catch(e){$('saveState').textContent='● Save unavailable'}},200);
+  }
+  function toast(message){const t=$('toast');t.textContent=message;t.classList.add('show');clearTimeout(hintTimer);hintTimer=setTimeout(()=>t.classList.remove('show'),2600)}
+  function setStatus(message){$('statusMessage').textContent=message}
+  function snap(v){return snapEnabled?Math.round(v*2)/2:round(v)}
+  function getPoint(event){
+    const p=svg.createSVGPoint();p.x=event.clientX;p.y=event.clientY;
+    const m=svg.getScreenCTM();if(!m)return {x:0,y:0};
+    const o=p.matrixTransform(m.inverse());return {x:o.x,y:o.y};
+  }
+  function viewSize(){
+    const box=$('stage').getBoundingClientRect();
+    const w=(isMobile()?43:57)/camera.zoom,h=w*(Math.max(1,box.height)/Math.max(1,box.width));
+    return {w,h};
+  }
+  function updateView(){const {w,h}=viewSize();svg.setAttribute('viewBox',`${camera.cx-w/2} ${camera.cy-h/2} ${w} ${h}`);$('zoomText').textContent=Math.round(camera.zoom*100)+'%';const line=document.querySelector('.scale-line');if(line)line.style.width=Math.max(20,Math.min(135,5*$('stage').clientWidth/w))+'px'}
+  function lineDist(p,a,b){
+    const dx=b.x-a.x,dy=b.y-a.y,den=dx*dx+dy*dy;
+    if(!den)return {d:Math.hypot(p.x-a.x,p.y-a.y),point:a,angle:0};
+    const t=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/den,0,1);
+    const q={x:a.x+t*dx,y:a.y+t*dy};
+    return {d:Math.hypot(q.x-p.x,q.y-p.y),point:q,angle:Math.atan2(dy,dx)*180/Math.PI,length:Math.sqrt(den)};
+  }
+  function nearWall(p){
+    const edges=[];
+    for(const e of floor().items){
+      if(e.type==='wall')edges.push([{x:e.x1,y:e.y1},{x:e.x2,y:e.y2}]);
+      if(e.type==='room'){
+        const x=e.x,y=e.y,w=e.w,h=e.h;
+        edges.push([{x,y},{x:x+w,y}],[{x:x+w,y},{x:x+w,y:y+h}],[{x:x+w,y:y+h},{x,y:y+h}],[{x,y:y+h},{x,y}]);
+      }
+    }
+    let best=null;
+    for(const [a,b] of edges){const v=lineDist(p,a,b);if(!best||v.d<best.d)best=v}
+    return best&&best.d<1.5&&best.length>1.5?best:null;
+  }
+  function itemById(itemId){return floor().items.find(x=>x.id===itemId)}
+  function getTarget(evt){const el=evt.target.closest('[data-id]');return el?.getAttribute('data-id')||null}
+  function svgText(t,x,y,size,color,extra=''){return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="${color}" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="${size}" ${extra}>${esc(t)}</text>`}
+  function showRoom(e){
+    const s=e.id===selected?'#438e68':'#3b574c';
+    return `<g data-id="${e.id}" class="plan-item"><rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="#f0f5ee" fill-opacity=".92" stroke="${s}" stroke-width=".42"/><rect x="${e.x+.26}" y="${e.y+.26}" width="${Math.max(0,e.w-.52)}" height="${Math.max(0,e.h-.52)}" fill="none" stroke="#b3c8b7" stroke-width=".045" pointer-events="none"/></g>`;
+  }
+  function showRoomAnnotation(e){return `<g pointer-events="none"><rect x="${e.x+.75}" y="${e.y+.74}" width="${Math.min(e.w-1.4,Math.max(4,e.name.length*.43+1.4))}" height="2.2" rx=".26" fill="#f6faf5" fill-opacity=".88"/><text x="${e.x+1.1}" y="${e.y+1.58}" fill="#446457" font-family="Inter,Segoe UI,Arial,sans-serif" font-weight="700" font-size=".72">${esc(e.name)}</text><text x="${e.x+1.1}" y="${e.y+2.42}" fill="#8da797" font-family="Inter,Segoe UI,Arial,sans-serif" font-size=".57">${nice(e.w)}' × ${nice(e.h)}'</text></g>`}
+  function showWall(e){
+    const len=Math.hypot(e.x2-e.x1,e.y2-e.y1);
+    return `<g data-id="${e.id}" class="plan-item"><line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="${selected===e.id?'#348560':'#344e45'}" stroke-width=".44" stroke-linecap="square"/>${selected===e.id?svgText(nice(len)+" ft",(e.x1+e.x2)/2,(e.y1+e.y2)/2-1,.65,'#3c825d','pointer-events="none"'):''}<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="transparent" stroke-width="1.3"/></g>`;
+  }
+  function showOpening(e){
+    const width=e.width||3,door=e.type==='door';
+    const g=`translate(${e.x} ${e.y}) rotate(${e.angle||0})`;
+    return `<g data-id="${e.id}" transform="${g}" class="plan-item"><line x1="${-width/2}" x2="${width/2}" y1="0" y2="0" stroke="#fbfcfa" stroke-width=".67" />${door?`<path d="M ${-width/2} 0 L ${-width/2} ${-width} A ${width} ${width} 0 0 1 ${width/2} 0" fill="none" stroke="#cb9c72" stroke-width=".11"/><line x1="${-width/2}" y1="0" x2="${-width/2}" y2="${-width}" stroke="#b17d50" stroke-width=".19"/>`:`<rect x="${-width/2}" y="-.18" width="${width}" height=".36" fill="#d8eef0" stroke="#5c9ca9" stroke-width=".12"/><line x1="${-width/2}" x2="${width/2}" y1="0" y2="0" stroke="#83bdc1" stroke-width=".07"/>`}<rect x="${-width/2}" y="-.45" width="${width}" height=".9" fill="transparent" stroke="${selected===e.id?'#4eab7b':'transparent'}" stroke-width=".12"/></g>`;
+  }
+  function showFurniture(e){
+    const x=e.x,y=e.y,w=e.w,h=e.h,c=e.subType;
+    const shape=[];
+    shape.push(`<rect width="${w}" height="${h}" rx=".24" fill="#dce5d8" stroke="#8fa995" stroke-width=".12"/>`);
+    if(c==='sofa'){shape.push(`<rect x=".2" y=".18" width="${w-.4}" height=".85" rx=".27" fill="#afc6b6" stroke="#95b3a1" stroke-width=".1"/><rect x=".2" y="1.1" width="${w-.4}" height="${h-1.3}" rx=".35" fill="#c6d8cb"/><path d="M ${w/2} 1.2 V ${h-.25}" stroke="#9eb9a8" stroke-width=".08"/>`)}
+    else if(c==='bed'){shape.push(`<rect x=".3" y=".3" width="${w-.6}" height="${h-.6}" rx=".25" fill="#f9f9ef" stroke="#acc2b1" stroke-width=".08"/><rect x=".4" y=".5" width="${(w-.9)/2}" height="1.3" rx=".2" fill="#b8d0bb"/><rect x="${w/2+.05}" y=".5" width="${(w-.9)/2}" height="1.3" rx=".2" fill="#b8d0bb"/><path d="M .4 2.1 H ${w-.4}" stroke="#abc2b0" stroke-width=".12"/>`)}
+    else if(c==='table'){shape.push(`<rect x=".4" y=".35" width="${w-.8}" height="${h-.7}" rx=".45" fill="#d4b99c" stroke="#ad987a" stroke-width=".12"/><circle cx="${w/2}" cy="${h/2}" r=".48" fill="#f3e7d7"/>`)}
+    else if(c==='desk'){shape.push(`<rect x=".3" y=".25" width="${w-.6}" height="${h-.5}" rx=".12" fill="#d6bda0" stroke="#ab997f" stroke-width=".12"/><rect x=".6" y=".42" width="1.1" height=".7" rx=".1" fill="#e4e8df"/>`)}
+    else if(c==='sink'){shape.push(`<rect x=".25" y=".25" width="${w-.5}" height="${h-.5}" rx=".35" fill="#eef7f5" stroke="#a7c1ba" stroke-width=".12"/><ellipse cx="${w/2}" cy="${h/2}" rx="${w*.28}" ry="${h*.25}" fill="#c9e2e0"/><circle cx="${w/2}" cy="${h/2}" r=".09" fill="#789c9c"/>`)}
+    else if(c==='toilet'){shape.push(`<rect x=".35" y=".2" width="${w-.7}" height=".62" rx=".14" fill="#f4f7f3" stroke="#9db9af" stroke-width=".1"/><ellipse cx="${w/2}" cy="${h*.59}" rx="${w*.34}" ry="${h*.29}" fill="#fbfefd" stroke="#9db9af" stroke-width=".12"/>`)}
+    else if(c==='stove'){for(let i=0;i<2;i++)for(let j=0;j<2;j++)shape.push(`<circle cx="${.65+i*1.18}" cy="${.65+j*1.18}" r=".35" fill="none" stroke="#7b9a88" stroke-width=".1"/>`)}
+    else if(c==='plant'){shape.push(`<circle cx="${w/2}" cy="${h/2}" r="${Math.min(w,h)*.39}" fill="#84b88d"/><circle cx="${w/2-.27}" cy="${h/2-.2}" r=".41" fill="#4c9163"/><circle cx="${w/2+.3}" cy="${h/2+.18}" r=".39" fill="#64a676"/>`)}
+    return `<g data-id="${e.id}" transform="translate(${x} ${y}) rotate(${e.rotation||0} ${w/2} ${h/2})" class="plan-item">${shape.join('')}<rect width="${w}" height="${h}" rx=".18" fill="transparent" stroke="${selected===e.id?'#408c65':'transparent'}" stroke-width=".15" stroke-dasharray=".28 .18"/></g>`;
+  }
+  function showLabel(e){return `<g data-id="${e.id}" class="plan-item">${svgText(e.text||'Label',e.x,e.y,.9,selected===e.id?'#3a8b60':'#496d58','font-weight="700"')}</g>`}
+  function showMeasure(e){return `<g data-id="${e.id}"><line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="#bb9076" stroke-width=".09" stroke-dasharray=".28 .16"/><circle cx="${e.x1}" cy="${e.y1}" r=".15" fill="#bb9076"/><circle cx="${e.x2}" cy="${e.y2}" r=".15" fill="#bb9076"/>${svgText(nice(Math.hypot(e.x2-e.x1,e.y2-e.y1))+' ft',(e.x1+e.x2)/2,(e.y1+e.y2)/2-.55,.67,'#ad7856')}</g>`}
+  const showItem = e => e.type==='room'?showRoom(e):e.type==='wall'?showWall(e):e.type==='door'||e.type==='window'?showOpening(e):e.type==='furniture'?showFurniture(e):e.type==='label'?showLabel(e):e.type==='measure'?showMeasure(e):'';
+  function renderPlan(){
+    const all=floor().items;
+    const order={room:0,wall:1,furniture:2,measure:3,label:4,door:5,window:5};
+    drawing.innerHTML=[...all].sort((a,b)=>(order[a.type]||0)-(order[b.type]||0)).map(showItem).join('')+all.filter(e=>e.type==='room').map(showRoomAnnotation).join('');
+    const e=itemById(selected);
+    let h='';
+    const dot=(x,y,key)=>`<g data-handle="${key}" style="cursor:crosshair"><circle data-handle="${key}" cx="${x}" cy="${y}" r="${isMobile()?1.25:.47}" fill="transparent"/><circle data-handle="${key}" cx="${x}" cy="${y}" r="${isMobile()?.55:.35}" fill="white" stroke="#3a9668" stroke-width=".13"/></g>`;
+    if(e?.type==='room'||e?.type==='furniture'){
+      const x=e.x,y=e.y,w=e.w,hgt=e.h;
+      h+=`<rect x="${x}" y="${y}" width="${w}" height="${hgt}" fill="none" stroke="#3d9b6c" stroke-width=".09" stroke-dasharray=".3 .21" pointer-events="none"/>`;
+      h+=dot(x,y,'nw')+dot(x+w,y,'ne')+dot(x,y+hgt,'sw')+dot(x+w,y+hgt,'se');
+    }else if(e?.type==='wall'||e?.type==='measure')h+=dot(e.x1,e.y1,'start')+dot(e.x2,e.y2,'end');
+    handles.innerHTML=h;
+    updateView();
+  }
+  function renderFloorTabs(){
+    $('floorTabs').innerHTML=project.floors.map((f,i)=>`<button class="floor-tab ${f.id===project.activeFloorId?'active':''}" data-floor="${esc(f.id)}" role="tab" aria-selected="${f.id===project.activeFloorId}">${i===0?'⌂ ':''}${esc(f.name)}</button>`).join('');
+    $('floorBreadcrumb').textContent=floor().name.toUpperCase();
+    $('modeBreadcrumb').textContent=project.viewMode==='3d'?'3D BUILDING':'2D FLOOR PLAN';
+    $('mode2D').classList.toggle('active',project.viewMode==='2d');
+    $('mode3D').classList.toggle('active',project.viewMode==='3d');
+    $('threeDStage').classList.toggle('hidden',project.viewMode!=='3d');
+    $('snapLabel').style.display=project.viewMode==='3d'?'none':'';
+    $('canvasHint').style.display=project.viewMode==='3d'?'none':'';
+    document.querySelector('.three-d-help').textContent=isMobile()?'Drag to rotate · Pinch to zoom':'Drag to rotate · Scroll to zoom';
+    $('zoomText').textContent=Math.round(camera.zoom*100)+'%';
+    if(project.viewMode==='3d')render3D();
+  }
+  function numberField(key,label,value,step='0.5'){return `<div class="field-group"><label class="field-label" for="fld-${key}">${label}</label><input id="fld-${key}" class="field-input" type="number" step="${step}" data-field="${key}" value="${round(value)}"></div>`}
+  function textField(key,label,value){return `<div class="field-group"><label class="field-label" for="fld-${key}">${label}</label><input id="fld-${key}" class="field-input" type="text" data-field="${key}" value="${esc(value)}" maxlength="70"></div>`}
+  function area(f){return f.items.filter(i=>i.type==='room').reduce((s,i)=>s+i.w*i.h,0)}
+  function renderProperties(){
+    const p=$('propertiesContent'),f=floor(),e=itemById(selected);
+    if(currentTab==='overview'){
+      p.innerHTML=`<div class="inspector-eyebrow">PROJECT SUMMARY</div><h2 class="inspector-heading">${esc(project.name)}</h2><div class="overview-card"><div class="overview-number">${Math.round(project.floors.reduce((s,l)=>s+area(l),0)).toLocaleString()} <span style="font-size:12px">sq ft</span></div><div class="overview-label">Total drawn room area across all floors</div></div><div class="stat-row"><span>Number of floors</span><strong>${project.floors.length}</strong></div><div class="stat-row"><span>Current floor</span><strong>${esc(f.name)}</strong></div><div class="stat-row"><span>Rooms on this floor</span><strong>${f.items.filter(i=>i.type==='room').length}</strong></div><div class="inspector-divider"></div><div class="inspector-section-title">FLOOR MANAGEMENT</div>${textField('floorName','Floor name',f.name)}<button class="secondary-action" data-action="duplicateFloor">Duplicate this floor</button><button class="secondary-action" data-action="addFloor">＋ Add another floor</button>${project.floors.length>1?'<button class="delete-btn" data-action="removeFloor">Remove this floor</button>':''}<div class="inspector-section-title">FLOORS IN PROJECT</div><div class="layer-list">${project.floors.map((l,i)=>`<div class="layer-item"><span>${esc(l.name)}</span><strong>${Math.round(area(l))} ft²</strong></div>`).join('')}</div>`;
+      return;
+    }
+    if(!e){
+      p.innerHTML=`<div class="empty-state"><div class="inspector-eyebrow">WELCOME TO YOUR STUDIO</div><h2 class="inspector-heading">Design something wonderful.</h2><p class="inspector-copy">Create spaces with precision, add the details that make a house a home, then explore every floor in 3D.</p><div class="selection-illustration"><svg viewBox="0 0 150 110" fill="none"><path d="M26 93V28h44v38h52v27H26Z" fill="#e4f0e5" stroke="#7fa68a" stroke-width="4"/><path d="M70 28h52v38M26 59h44M90 66v27" stroke="#719c7e" stroke-width="3"/><path d="M80 28v-8h16v8M48 93V81h14v12" stroke="#d5b08c" stroke-width="4"/><circle cx="100" cy="46" r="8" fill="#9cbdad"/></svg></div><div class="inspector-section-title">QUICK START</div><p class="mini-tip">① Choose <strong>Room</strong> and drag out a space.<br>② Add doors, windows, and furniture.<br>③ Click <strong>3D building</strong> to see all floors.</p><div class="inspector-divider"></div><div class="inspector-section-title">CURRENT FLOOR</div><div class="stat-row"><span>Rooms</span><strong>${f.items.filter(i=>i.type==='room').length}</strong></div><div class="stat-row"><span>Floor area</span><strong>${Math.round(area(f))} ft²</strong></div><button class="secondary-action" data-action="overview">Manage floors →</button></div>`;
+      return;
+    }
+    const typeName=e.type==='furniture'?names[e.subType]:e.type[0].toUpperCase()+e.type.slice(1);
+    let fields='';
+    if(e.type==='room')fields+=textField('name','Room name',e.name);
+    if(e.type==='label')fields+=textField('text','Label text',e.text);
+    if(e.type==='room'||e.type==='furniture'||e.type==='label'){
+      fields+=`<div class="field-row">${numberField('x','X position (ft)',e.x)}${numberField('y','Y position (ft)',e.y)}</div>`;
+      if(e.type!=='label')fields+=`<div class="field-row">${numberField('w','Width (ft)',e.w)}${numberField('h','Depth (ft)',e.h)}</div>`;
+    }else if(e.type==='door'||e.type==='window'){
+      fields+=`<div class="field-row">${numberField('x','X (ft)',e.x)}${numberField('y','Y (ft)',e.y)}</div>${numberField('width','Opening width (ft)',e.width)}${numberField('angle','Wall angle (degrees)',e.angle,1)}`;
+    }else{
+      fields+=`<div class="field-row">${numberField('x1','Start X',e.x1)}${numberField('y1','Start Y',e.y1)}</div><div class="field-row">${numberField('x2','End X',e.x2)}${numberField('y2','End Y',e.y2)}</div>`;
+    }
+    if(e.type==='furniture')fields+=`<button class="secondary-action" data-action="rotate">↻ Rotate furniture 90°</button>`;
+    p.innerHTML=`<div class="inspector-eyebrow">SELECTED ELEMENT</div><h2 class="inspector-heading">${esc(typeName)}</h2><p class="inspector-copy">Adjust the exact dimensions below. All measurements are in feet.</p><div class="inspector-divider"></div><div class="inspector-section-title">DIMENSIONS &amp; POSITION</div>${fields}${e.type==='room'? `<div class="stat-row"><span>Floor area</span><strong>${Math.round(e.w*e.h)} ft²</strong></div>`:''}<button class="delete-btn" data-action="delete">Delete ${esc(typeName.toLowerCase())}</button>`;
+  }
+  function render(){
+    $('projectName').value=project.name;
+    renderPlan();renderFloorTabs();renderProperties();
+    $('undoBtn').disabled=!history.length;$('redoBtn').disabled=!future.length;
+    svg.dataset.tool=activeTool;
+    document.querySelectorAll('.tool').forEach(el=>el.classList.toggle('active',el.dataset.tool===activeTool));
+    document.querySelectorAll('[data-furniture]').forEach(el=>el.classList.toggle('active',el.dataset.furniture===furnitureTool));
+    document.querySelectorAll('.right-tab').forEach(el=>el.classList.toggle('active',el.dataset.tab===currentTab));
+    $('mobileMoreBtn').classList.toggle('tool-engaged',['label','measure','pan'].includes(activeTool));
+    $('mobileFurnitureBtn').classList.toggle('tool-engaged',activeTool==='furniture');
+    updateMobileUI();
+  }
+  function updateMobileUI(){
+    const panel=document.querySelector('.properties-panel'),e=itemById(selected);
+    panel.classList.toggle('open',sheetOpen&&isMobile());
+    $('mobileSheetToggle').setAttribute('aria-expanded',String(sheetOpen&&isMobile()));
+    $('mobileSheetArrow').textContent=sheetOpen?'⌄':'⌃';
+    $('mobileSheetTitle').textContent=currentTab==='overview'?'Project overview':e?(e.type==='room'?e.name:e.type==='furniture'?names[e.subType]:e.type[0].toUpperCase()+e.type.slice(1))+' · Edit details':'Properties & dimensions';
+  }
+  function closeMobileToolMenus(){
+    document.querySelector('.tools-panel').classList.remove('show-more','show-furniture');
+    $('mobileMoreBtn').classList.remove('active');$('mobileFurnitureBtn').classList.remove('active');
+    $('mobileMoreBtn').setAttribute('aria-expanded','false');$('mobileFurnitureBtn').setAttribute('aria-expanded','false');
+  }
+  function setTool(tool,sub){
+    activeTool=tool;furnitureTool=sub||null;
+    selected=null;draft=null;tempDrawing.innerHTML='';
+    sheetOpen=false;
+    closeMobileToolMenus();
+    const titles={select:'Click an object to edit',room:'Drag to draw a room',wall:'Drag to draw a wall',door:'Click an existing wall to add a door',window:'Click an existing wall to add a window',measure:'Drag between two points to measure',label:'Click to add text',pan:'Drag to pan the canvas',furniture:'Click where you want to place furniture'};
+    setStatus(titles[tool]);render();
+  }
+  function resize(e,handle,p,old){
+    if(handle==='start'||handle==='end'){e[handle==='start'?'x1':'x2']=snap(p.x);e[handle==='start'?'y1':'y2']=snap(p.y);return}
+    const x1=handle.includes('w')?snap(p.x):old.x;
+    const y1=handle.includes('n')?snap(p.y):old.y;
+    const x2=handle.includes('e')?snap(p.x):old.x+old.w;
+    const y2=handle.includes('s')?snap(p.y):old.y+old.h;
+    if(Math.abs(x2-x1)<1||Math.abs(y2-y1)<1)return;
+    e.x=Math.min(x1,x2);e.y=Math.min(y1,y2);e.w=Math.abs(x2-x1);e.h=Math.abs(y2-y1);
+  }
+  function renderDraft(){
+    if(!draft)return tempDrawing.innerHTML='';
+    const a=draft.a,b=draft.b;
+    if(draft.type==='room'){
+      const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(b.x-a.x),h=Math.abs(b.y-a.y);
+      tempDrawing.innerHTML=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#b2d8bd" fill-opacity=".3" stroke="#40855e" stroke-width=".18" stroke-dasharray=".3 .18"/>${svgText(nice(w)+"' × "+nice(h)+"'",x+w/2,y+h/2,.7,'#357e52')}`;
+    }else{
+      tempDrawing.innerHTML=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#4a936f" stroke-width=".2" stroke-dasharray=".3 .2"/>${svgText(nice(Math.hypot(b.x-a.x,b.y-a.y))+" ft",(a.x+b.x)/2,(a.y+b.y)/2-.7,.7,'#317e56')}`;
+    }
+  }
+  function beginPinch(){
+    if(touchPoints.size<2)return;
+    if(pointer?.old&&pointer?.itemId){const e=itemById(pointer.itemId);if(e)Object.assign(e,clone(pointer.old))}
+    pointer=null;draft=null;tempDrawing.innerHTML='';renderPlan();
+    const p=[...touchPoints.values()],mid={x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+    pinch={distance:Math.max(10,Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)),zoom:camera.zoom,anchor:getPoint({clientX:mid.x,clientY:mid.y})};
+  }
+  function movePinch(){
+    if(!pinch||touchPoints.size<2)return;
+    const p=[...touchPoints.values()],mid={x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};
+    camera.zoom=clamp(pinch.zoom*Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)/pinch.distance,.35,3.8);
+    const r=svg.getBoundingClientRect(),d=viewSize();
+    camera.cx=pinch.anchor.x-(mid.x-r.left-r.width/2)/r.width*d.w;
+    camera.cy=pinch.anchor.y-(mid.y-r.top-r.height/2)/r.height*d.h;
+    updateView();
+  }
+  function onDown(evt){
+    if(project.viewMode!=='2d'||evt.button>0)return;
+    evt.preventDefault();svg.setPointerCapture(evt.pointerId);
+    if(evt.pointerType==='touch'){
+      touchPoints.set(evt.pointerId,{x:evt.clientX,y:evt.clientY});
+      if(touchPoints.size>=2){beginPinch();return}
+    }
+    const raw=getPoint(evt),p={x:snap(raw.x),y:snap(raw.y)};
+    if(activeTool==='pan'||evt.buttons===4){pointer={kind:'pan',start:{x:evt.clientX,y:evt.clientY},before:{...camera}};return}
+    if(['room','wall','measure'].includes(activeTool)){draft={type:activeTool,a:p,b:p};pointer={kind:'draw',start:p};renderDraft();return}
+    if(activeTool==='door'||activeTool==='window'){
+      const wall=nearWall(raw);
+      if(!wall){toast('Click close to a wall to place a '+activeTool);return}
+      const before=state();floor().items.push(opening(activeTool,snap(wall.point.x),snap(wall.point.y),Math.round(wall.angle),activeTool==='door'?3:4));changed(before);return;
+    }
+    if(activeTool==='label'){
+      const label=prompt('Label text:','Add a label');
+      if(label?.trim()){const before=state();const e={id:id(),type:'label',x:p.x,y:p.y,text:label.trim().slice(0,70)};floor().items.push(e);selected=e.id;changed(before)}
+      return;
+    }
+    if(activeTool==='furniture'){
+      const before=state(),e=furniture(furnitureTool,p.x-sizes[furnitureTool][0]/2,p.y-sizes[furnitureTool][1]/2);
+      floor().items.push(e);selected=e.id;changed(before);return;
+    }
+    const handle=evt.target.closest('[data-handle]')?.getAttribute('data-handle'),target=handle?selected:getTarget(evt);
+    if(target!==selected){selected=target;sheetOpen=!!target;currentTab='properties';render()}
+    if(!target){
+      if(evt.pointerType==='touch')pointer={kind:'pan',start:{x:evt.clientX,y:evt.clientY},before:{...camera}};
+      else pointer=null;
+      return;
+    }
+    const item=itemById(target);
+    pointer={kind:handle?'resize':'move',start:p,before:state(),itemId:target,old:clone(item),handle};
+  }
+  function onMove(evt){
+    if(evt.pointerType==='touch'&&touchPoints.has(evt.pointerId)){
+      touchPoints.set(evt.pointerId,{x:evt.clientX,y:evt.clientY});
+      if(pinch){movePinch();return}
+    }
+    const raw=getPoint(evt);$('cursorPosition').textContent=`X: ${nice(raw.x)} ft   Y: ${nice(raw.y)} ft`;
+    if(!pointer)return;
+    if(pointer.kind==='pan'){
+      const r=svg.getBoundingClientRect(),dims=viewSize();
+      camera.cx=pointer.before.cx-(evt.clientX-pointer.start.x)/r.width*dims.w;
+      camera.cy=pointer.before.cy-(evt.clientY-pointer.start.y)/r.height*dims.h;updateView();return;
+    }
+    let p={x:snap(raw.x),y:snap(raw.y)};
+    if(pointer.kind==='draw'){
+      if(evt.shiftKey&&(activeTool==='wall'||activeTool==='measure')){
+        if(Math.abs(p.x-pointer.start.x)>Math.abs(p.y-pointer.start.y))p.y=pointer.start.y;else p.x=pointer.start.x;
+      }
+      draft.b=p;renderDraft();return;
+    }
+    const e=itemById(pointer.itemId);if(!e)return;
+    Object.assign(e,clone(pointer.old));
+    if(pointer.kind==='resize')resize(e,pointer.handle,p,pointer.old);
+    else{
+      const dx=snap(p.x-pointer.start.x),dy=snap(p.y-pointer.start.y);
+      if(e.type==='wall'||e.type==='measure'){e.x1=round(pointer.old.x1+dx);e.y1=round(pointer.old.y1+dy);e.x2=round(pointer.old.x2+dx);e.y2=round(pointer.old.y2+dy)}
+      else{e.x=round(pointer.old.x+dx);e.y=round(pointer.old.y+dy)}
+    }
+    renderPlan();
+  }
+  function onUp(evt){
+    if(evt.pointerType==='touch'){
+      touchPoints.delete(evt.pointerId);
+      if(pinch){if(touchPoints.size<2)pinch=null;pointer=null;return}
+    }
+    if(!pointer)return;
+    if(pointer.kind==='draw'&&draft){
+      const a=draft.a,b=draft.b,w=Math.abs(b.x-a.x),h=Math.abs(b.y-a.y),length=Math.hypot(w,h);
+      const before=state();
+      if(draft.type==='room'&&w>=2&&h>=2){
+        const name='Room '+(floor().items.filter(e=>e.type==='room').length+1);
+        const e=room(Math.min(a.x,b.x),Math.min(a.y,b.y),w,h,name);floor().items.push(e);selected=e.id;setTool('select');selected=e.id;
+      }else if((draft.type==='wall'||draft.type==='measure')&&length>=1){
+        const e={id:id(),type:draft.type,x1:a.x,y1:a.y,x2:b.x,y2:b.y};floor().items.push(e);selected=e.id;setTool('select');selected=e.id;
+      }else toast('Draw a larger shape to add it');
+      if(selected)sheetOpen=true;
+      draft=null;tempDrawing.innerHTML='';pointer=null;changed(before);render();return;
+    }
+    if(pointer.kind==='move'||pointer.kind==='resize')changed(pointer.before);
+    pointer=null;render();
+  }
+  svg.addEventListener('pointerdown',onDown);
+  svg.addEventListener('pointermove',onMove);
+  svg.addEventListener('pointerup',onUp);
+  svg.addEventListener('pointercancel',evt=>{touchPoints.delete(evt.pointerId);pinch=null;pointer=null;draft=null;tempDrawing.innerHTML='';render()});
+  svg.addEventListener('wheel',evt=>{if(project.viewMode!=='2d')return;evt.preventDefault();camera.zoom=clamp(camera.zoom*(evt.deltaY<0?1.12:.89),.35,3.8);updateView()},{passive:false});
+  document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{setMode('2d');setTool(b.dataset.tool)}));
+  document.querySelectorAll('[data-furniture]').forEach(b=>b.addEventListener('click',()=>{setMode('2d');setTool('furniture',b.dataset.furniture)}));
+  $('mobileMoreBtn').addEventListener('click',()=>{
+    const p=document.querySelector('.tools-panel'),on=!p.classList.contains('show-more');
+    closeMobileToolMenus();p.classList.toggle('show-more',on);$('mobileMoreBtn').classList.toggle('active',on);$('mobileMoreBtn').setAttribute('aria-expanded',String(on));
+  });
+  $('mobileFurnitureBtn').addEventListener('click',()=>{
+    const p=document.querySelector('.tools-panel'),on=!p.classList.contains('show-furniture');
+    closeMobileToolMenus();p.classList.toggle('show-furniture',on);$('mobileFurnitureBtn').classList.toggle('active',on);$('mobileFurnitureBtn').setAttribute('aria-expanded',String(on));
+  });
+  $('mobileSheetToggle').addEventListener('click',()=>{sheetOpen=!sheetOpen;updateMobileUI()});
+  function setMode(mode){project.viewMode=mode;sheetOpen=false;closeMobileToolMenus();save();render();if(mode==='3d')requestAnimationFrame(render3D)}
+  $('mode2D').addEventListener('click',()=>setMode('2d'));
+  $('mode3D').addEventListener('click',()=>setMode('3d'));
+  $('floorTabs').addEventListener('click',evt=>{const b=evt.target.closest('[data-floor]');if(!b)return;project.activeFloorId=b.dataset.floor;selected=null;sheetOpen=false;save();render()});
+  function addFloor(duplicate=false){
+    const before=state(),n=project.floors.length+1;
+    const source=duplicate?clone(floor().items).map(e=>({...e,id:id()})):[];
+    const f={id:id(),name:duplicate?floor().name+' copy':n===2?'Second floor':n===3?'Third floor':'Floor '+n,items:source};
+    project.floors.push(f);project.activeFloorId=f.id;selected=null;sheetOpen=false;changed(before);
+    toast(duplicate?'Floor duplicated':'New floor added');return f;
+  }
+  $('addFloorBtn').addEventListener('click',()=>addFloor());
+  $('snapCheck').addEventListener('change',e=>{snapEnabled=e.target.checked;setStatus(snapEnabled?'Snap to half-foot grid enabled':'Freehand positioning enabled')});
+  document.querySelectorAll('.right-tab').forEach(b=>b.addEventListener('click',()=>{currentTab=b.dataset.tab;sheetOpen=true;render()}));
+  $('propertiesContent').addEventListener('change',evt=>{
+    const input=evt.target.closest('[data-field]');if(!input)return;
+    const before=state();const key=input.dataset.field;
+    if(key==='floorName'){floor().name=input.value.trim()||floor().name}
+    else{
+      const e=itemById(selected);if(!e)return;
+      if(['name','text'].includes(key))e[key]=input.value.trim()||e[key];
+      else{const v=Number(input.value);if(!Number.isFinite(v))return;let n=round(v);if(['w','h','width'].includes(key))n=Math.max(.5,n);e[key]=n}
+    }
+    changed(before);
+  });
+  $('propertiesContent').addEventListener('click',evt=>{
+    const b=evt.target.closest('[data-action]');if(!b)return;
+    if(b.dataset.action==='overview'){currentTab='overview';render();return}
+    if(b.dataset.action==='addFloor'){addFloor();return}
+    if(b.dataset.action==='duplicateFloor'){addFloor(true);return}
+    if(b.dataset.action==='removeFloor'){
+      if(project.floors.length<=1)return;
+      if(!confirm('Delete '+floor().name+' and everything on it?'))return;
+      const before=state();project.floors=project.floors.filter(x=>x.id!==project.activeFloorId);project.activeFloorId=project.floors[0].id;selected=null;changed(before);return;
+    }
+    const e=itemById(selected);if(!e)return;
+    const before=state();
+    if(b.dataset.action==='delete'){floor().items=floor().items.filter(x=>x.id!==e.id);selected=null}
+    if(b.dataset.action==='rotate')e.rotation=((e.rotation||0)+90)%360;
+    changed(before);
+  });
+  $('projectName').addEventListener('change',evt=>{const before=state();project.name=evt.target.value.trim()||'Untitled house';changed(before)});
+  $('undoBtn').addEventListener('click',undo);$('redoBtn').addEventListener('click',redo);
+  function undo(){if(!history.length)return;future.push(state());project=JSON.parse(history.pop());selected=null;save();render()}
+  function redo(){if(!future.length)return;history.push(state());project=JSON.parse(future.pop());selected=null;save();render()}
+  function deleteSelected(){if(!selected)return;const before=state();floor().items=floor().items.filter(e=>e.id!==selected);selected=null;changed(before)}
+  document.addEventListener('keydown',evt=>{
+    if(evt.target.matches('input,textarea,select'))return;
+    const key=evt.key.toLowerCase();
+    if((evt.ctrlKey||evt.metaKey)&&key==='z'){evt.preventDefault();evt.shiftKey?redo():undo();return}
+    if((evt.ctrlKey||evt.metaKey)&&key==='y'){evt.preventDefault();redo();return}
+    if(key==='delete'||key==='backspace'){evt.preventDefault();deleteSelected();return}
+    if(key==='escape'){selected=null;setTool('select');return}
+    if(project.viewMode==='3d')return;
+    const shortcuts={v:'select',r:'room',w:'wall',d:'door',n:'window',t:'label',m:'measure',h:'pan'};
+    if(shortcuts[key]){evt.preventDefault();setTool(shortcuts[key])}
+  });
+  $('zoomIn').addEventListener('click',()=>{camera.zoom=clamp(camera.zoom*1.2,.3,4);updateView()});
+  $('zoomOut').addEventListener('click',()=>{camera.zoom=clamp(camera.zoom/1.2,.3,4);updateView()});
+  $('fitBtn').addEventListener('click',fitDrawing);
+  function fitDrawing(){
+    const ext=extent(project.floors.map(f=>f.items).flat());
+    const ratio=$('stage').clientHeight/$('stage').clientWidth;
+    camera.cx=(ext.minX+ext.maxX)/2;camera.cy=(ext.minY+ext.maxY)/2;
+    const spanX=Math.max(30,ext.maxX-ext.minX+10),spanY=Math.max(20,ext.maxY-ext.minY+10);
+    camera.zoom=clamp((isMobile()?43:57)/Math.max(spanX,spanY/Math.max(.1,ratio)),.3,2);
+    updateView();
+  }
+  function extent(items){
+    let a=Infinity,b=Infinity,c=-Infinity,d=-Infinity;
+    const push=(x,y)=>{a=Math.min(a,x);b=Math.min(b,y);c=Math.max(c,x);d=Math.max(d,y)};
+    items.forEach(e=>{
+      if(e.type==='room'||e.type==='furniture'){push(e.x,e.y);push(e.x+e.w,e.y+e.h)}
+      else if(e.type==='wall'||e.type==='measure'){push(e.x1,e.y1);push(e.x2,e.y2)}
+      else if(Number.isFinite(e.x)){push(e.x,e.y)}
+    });
+    return Number.isFinite(a)?{minX:a,minY:b,maxX:c,maxY:d}:{minX:0,minY:0,maxX:42,maxY:34};
+  }
+
+  // Interactive 3D building projection: every plan floor occupies its own
+  // elevation, with open-top rooms, extruded walls, furniture, and openings.
+  function render3D(){
+    if(project.viewMode!=='3d'||!ctx3d)return;
+    const rect=modelCanvas.getBoundingClientRect();
+    if(!rect.width||!rect.height)return;
+    const dpr=Math.min(devicePixelRatio||1,2);
+    modelCanvas.width=Math.round(rect.width*dpr);modelCanvas.height=Math.round(rect.height*dpr);
+    const cw=rect.width,ch=rect.height;ctx3d.setTransform(dpr,0,0,dpr,0,0);ctx3d.clearRect(0,0,cw,ch);
+    const visible=showAll?project.floors:[floor()];
+    const ext=extent(project.floors.map(f=>f.items).flat());
+    const ox=(ext.minX+ext.maxX)/2,oy=(ext.minY+ext.maxY)/2;
+    const cx=ox,cy=oy;const floorSpacing=separateFloors?13:9,upper=project.floors.length*floorSpacing;
+    const cos=Math.cos(orbit.theta),sin=Math.sin(orbit.theta),sPhi=Math.sin(orbit.phi),cPhi=Math.cos(orbit.phi);
+    const transform=(x,y,z)=>{
+      const dx=x-cx,dy=y-cy,rx=cos*dx-sin*dy,ry=sin*dx+cos*dy;
+      return {x:rx,y:-ry*sPhi-(z-upper*.45)*cPhi,depth:ry*cPhi-(z-upper*.45)*sPhi};
+    };
+    const bounds=[];
+    for(const z of [0,upper+10])for(const x of [ext.minX-3,ext.maxX+3])for(const y of [ext.minY-3,ext.maxY+3])bounds.push(transform(x,y,z));
+    const bw=Math.max(...bounds.map(p=>p.x))-Math.min(...bounds.map(p=>p.x));
+    const bh=Math.max(...bounds.map(p=>p.y))-Math.min(...bounds.map(p=>p.y));
+    const scale=Math.min(cw*.76/Math.max(15,bw),ch*.70/Math.max(18,bh))*orbit.zoom;
+    const xcenter=(Math.max(...bounds.map(p=>p.x))+Math.min(...bounds.map(p=>p.x)))/2;
+    const ycenter=(Math.max(...bounds.map(p=>p.y))+Math.min(...bounds.map(p=>p.y)))/2;
+    const projectP=(x,y,z)=>{const p=transform(x,y,z);return {x:cw/2+(p.x-xcenter)*scale,y:ch/2+(p.y-ycenter)*scale,depth:p.depth}};
+    const polys=[];
+    const add=(points,fill,stroke='#739586',width=1,kind='face')=>{
+      const pts=points.map(p=>projectP(...p));
+      polys.push({pts,fill,stroke,width,depth:pts.reduce((s,p)=>s+p.depth,0)/pts.length,kind});
+    };
+    const surface=(x,y,w,h,z,fill)=>add([[x,y,z],[x+w,y,z],[x+w,y+h,z],[x,y+h,z]],fill,'#a2b7a6',.6,'floor');
+    const vertical=(a,b,z,height,fill)=>{
+      const px=projectP(a[0],a[1],z),qx=projectP(b[0],b[1],z);
+      add([[...a,z],[...b,z],[...b,z+height],[...a,z+height]],fill,'#729284',.65,'wall');
+    };
+    const palette=['#e4f0e3','#e8eee2','#e4edf0','#eee9e0','#eff0e4','#e6efe7','#e5edf1'];
+    visible.forEach(f=>{
+      const i=project.floors.findIndex(l=>l.id===f.id),z=i*floorSpacing;
+      f.items.forEach((e,k)=>{
+        if(e.type==='room'){
+          const {x,y,w,h}=e;
+          surface(x,y,w,h,z+.1,palette[k%palette.length]);
+          // Slightly translucent wall faces preserve interior visibility.
+          vertical([x,y],[x+w,y],z,8,'rgba(173,200,183,.61)');
+          vertical([x+w,y],[x+w,y+h],z,8,'rgba(125,162,143,.58)');
+          vertical([x+w,y+h],[x,y+h],z,8,'rgba(140,180,158,.54)');
+          vertical([x,y+h],[x,y],z,8,'rgba(189,211,194,.57)');
+          add([[x,y,z+8],[x+w,y,z+8],[x+w,y+.38,z+8],[x,y+.38,z+8]],'#779e86','#618772',.5,'top');
+          add([[x,y,z+8],[x+.38,y,z+8],[x+.38,y+h,z+8],[x,y+h,z+8]],'#779e86','#618772',.5,'top');
+        }else if(e.type==='wall'){
+          vertical([e.x1,e.y1],[e.x2,e.y2],z,8,'rgba(137,173,152,.75)');
+        }else if(e.type==='furniture'){
+          const hz=e.subType==='plant'?2.7:e.subType==='bed'||e.subType==='sofa'?2:2.8;
+          const topColor=e.subType==='plant'?'#719b71':e.subType==='table'||e.subType==='desk'?'#cfae88':e.subType==='bed'?'#eff5e9':'#a2bda7';
+          const {x,y,w,h}=e;
+          add([[x,y,z+hz],[x+w,y,z+hz],[x+w,y+h,z+hz],[x,y+h,z+hz]],topColor,'#6e9680',.65,'furniture');
+          vertical([x,y+h],[x+w,y+h],z+.1,hz,topColor);
+          vertical([x+w,y],[x+w,y+h],z+.1,hz,'#a3afa0');
+        }else if(e.type==='window'||e.type==='door'){
+          const a=(e.angle||0)*Math.PI/180,dx=Math.cos(a)*e.width/2,dy=Math.sin(a)*e.width/2;
+          const z0=z+(e.type==='window'?3:0),z1=z+(e.type==='window'?6.5:6.8);
+          add([[e.x-dx,e.y-dy,z0],[e.x+dx,e.y+dy,z0],[e.x+dx,e.y+dy,z1],[e.x-dx,e.y-dy,z1]],e.type==='window'?'rgba(127,194,203,.91)':'rgba(219,186,144,.85)',e.type==='window'?'#398e9d':'#9f784e',1.2,'opening');
+        }
+      });
+      // Slab edges mark the stacked level even when rooms are open.
+      if(f.items.some(e=>e.type==='room')){
+        add([[ext.minX-.35,ext.maxY+.35,z-.35],[ext.maxX+.35,ext.maxY+.35,z-.35],[ext.maxX+.35,ext.maxY+.35,z+.12],[ext.minX-.35,ext.maxY+.35,z+.12]],'#adbeb1','#799683',.6,'slab');
+      }
+    });
+    if(showRoof&&showAll){
+      const x=ext.minX-.8,y=ext.minY-.8,w=ext.maxX-ext.minX+1.6,h=ext.maxY-ext.minY+1.6,z=(project.floors.length-1)*floorSpacing+9;
+      const mid=x+w/2;
+      add([[x,y,z],[mid,y,z+5],[mid,y+h,z+5],[x,y+h,z]],'rgba(92,126,111,.76)','#527963',1.5,'roof');
+      add([[mid,y,z+5],[x+w,y,z],[x+w,y+h,z],[mid,y+h,z+5]],'rgba(120,154,132,.76)','#527963',1.5,'roof');
+    }
+    polys.sort((a,b)=>b.depth-a.depth);
+    ctx3d.lineJoin='round';
+    for(const p of polys){
+      ctx3d.beginPath();
+      p.pts.forEach((v,i)=>i?ctx3d.lineTo(v.x,v.y):ctx3d.moveTo(v.x,v.y));
+      ctx3d.closePath();ctx3d.fillStyle=p.fill;ctx3d.fill();
+      ctx3d.strokeStyle=p.stroke;ctx3d.lineWidth=p.width;ctx3d.stroke();
+    }
+    $('modelFloorList').innerHTML=(showAll?project.floors:[floor()]).map((f,i)=>`<span class="model-floor-tag">${esc(f.name)} · ${Math.round(area(f))} ft²</span>`).reverse().join('');
+  }
+  const modelTouches=new Map();let modelPinch=null;
+  modelCanvas.addEventListener('pointerdown',e=>{
+    modelCanvas.setPointerCapture(e.pointerId);
+    if(e.pointerType==='touch'){
+      modelTouches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(modelTouches.size>=2){const p=[...modelTouches.values()];modelPinch={distance:Math.max(10,Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)),zoom:orbit.zoom};spin=null;return}
+    }
+    spin={x:e.clientX,y:e.clientY,theta:orbit.theta,phi:orbit.phi};
+  });
+  modelCanvas.addEventListener('pointermove',e=>{
+    if(e.pointerType==='touch'&&modelTouches.has(e.pointerId)){
+      modelTouches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(modelPinch&&modelTouches.size>=2){const p=[...modelTouches.values()];orbit.zoom=clamp(modelPinch.zoom*Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)/modelPinch.distance,.5,3);render3D();return}
+    }
+    if(!spin)return;orbit.theta=spin.theta+(e.clientX-spin.x)*.012;orbit.phi=clamp(spin.phi+(e.clientY-spin.y)*.009,.25,1.48);render3D();
+  });
+  const stopModelPointer=e=>{modelTouches.delete(e.pointerId);if(modelTouches.size<2)modelPinch=null;spin=null};
+  modelCanvas.addEventListener('pointerup',stopModelPointer);
+  modelCanvas.addEventListener('pointercancel',stopModelPointer);
+  modelCanvas.addEventListener('wheel',e=>{e.preventDefault();orbit.zoom=clamp(orbit.zoom*(e.deltaY<0?1.11:.9),.5,3);render3D()},{passive:false});
+  $('showAllFloors').addEventListener('change',e=>{showAll=e.target.checked;render3D()});
+  $('separateFloors').addEventListener('change',e=>{separateFloors=e.target.checked;render3D()});
+  $('showRoof').addEventListener('change',e=>{showRoof=e.target.checked;render3D()});
+  $('reset3D').addEventListener('click',()=>{orbit={theta:-.73,phi:.86,zoom:1};render3D()});
+  $('newBtn').addEventListener('click',()=>{
+    if(!confirm('Create a new blank project? Your current project can be downloaded first using Export → Editable project.'))return;
+    const before=state(),f={id:id(),name:'Ground floor',items:[]};
+    project={name:'Untitled house',floors:[f],activeFloorId:f.id,viewMode:'2d'};
+    selected=null;currentTab='properties';changed(before);fitDrawing();toast('New blank project created');
+  });
+  $('importBtn').addEventListener('click',()=>$('fileInput').click());
+  $('projectMenuBtn').addEventListener('click',e=>{e.stopPropagation();$('exportMenu').classList.add('hidden');const open=$('projectMenu').classList.toggle('hidden')===false;$('projectMenuBtn').setAttribute('aria-expanded',String(open))});
+  $('projectMenu').addEventListener('click',e=>{
+    const b=e.target.closest('[data-project-action]');if(!b)return;
+    $('projectMenu').classList.add('hidden');$('projectMenuBtn').setAttribute('aria-expanded','false');
+    if(b.dataset.projectAction==='new')$('newBtn').click();
+    if(b.dataset.projectAction==='open')$('importBtn').click();
+    if(b.dataset.projectAction==='overview'){currentTab='overview';sheetOpen=true;render()}
+    if(b.dataset.projectAction==='install'){
+      if(installPrompt){installPrompt.prompt();installPrompt.userChoice.then(()=>installPrompt=null)}
+      else toast('Open your browser menu and choose Install app or Add to Home screen');
+    }
+  });
+  $('fileInput').addEventListener('change',async e=>{
+    const file=e.target.files[0];if(!file)return;
+    try{
+      if(file.size>5e6)throw Error('File is too large');
+      const obj=JSON.parse(await file.text());
+      if(!obj||!Array.isArray(obj.floors)||!obj.floors.length||obj.floors.length>50||obj.floors.some(f=>typeof f.name!=='string'||!Array.isArray(f.items)||f.items.length>10000))throw Error('Not a valid HousePlan project');
+      for(const f of obj.floors)for(const item of f.items){
+        if(!['room','wall','door','window','furniture','measure','label'].includes(item.type))throw Error('Unsupported drawing item');
+        for(const k of ['x','y','w','h','x1','y1','x2','y2'])if(k in item&&(!Number.isFinite(item[k])||Math.abs(item[k])>100000))throw Error('Invalid measurements');
+      }
+      const before=state();project={name:String(obj.name||'Imported project').slice(0,70),floors:obj.floors,activeFloorId:obj.floors.some(f=>f.id===obj.activeFloorId)?obj.activeFloorId:obj.floors[0].id,viewMode:'2d'};
+      selected=null;changed(before);fitDrawing();toast('Project imported successfully');
+    }catch(err){toast('Could not open project: '+err.message)}finally{e.target.value=''}
+  });
+  $('exportBtn').addEventListener('click',e=>{e.stopPropagation();$('projectMenu').classList.add('hidden');$('projectMenuBtn').setAttribute('aria-expanded','false');$('exportMenu').classList.toggle('hidden')});
+  document.addEventListener('click',e=>{if(!e.target.closest('#exportMenu,#exportBtn'))$('exportMenu').classList.add('hidden');if(!e.target.closest('#projectMenu,#projectMenuBtn')){$('projectMenu').classList.add('hidden');$('projectMenuBtn').setAttribute('aria-expanded','false')}});
+  $('exportMenu').addEventListener('click',async e=>{
+    const b=e.target.closest('[data-export]');if(!b)return;
+    $('exportMenu').classList.add('hidden');
+    try{await exportFile(b.dataset.export)}catch(err){toast('Export failed: '+err.message)}
+  });
+  function filename(ext){return (project.name||'houseplan').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,50)+'.'+ext}
+  function download(blob,name){const a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000)}
+  function standaloneSVG(){
+    const backup=selected;selected=null;renderPlan();
+    const ext=extent(floor().items),pad=3;
+    const x=ext.minX-pad,y=ext.minY-pad,w=ext.maxX-ext.minX+pad*2,h=ext.maxY-ext.minY+pad*2;
+    const content=drawing.innerHTML;
+    selected=backup;renderPlan();
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.max(600,Math.round(w*30))}" height="${Math.max(400,Math.round(h*30))}" viewBox="${x} ${y} ${w} ${h}"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#fff"/>${content}</svg>`;
+  }
+  async function exportFile(type){
+    if(type==='json'){download(new Blob([JSON.stringify({...project,viewMode:'2d'},null,2)],{type:'application/json'}),filename('json'));toast('Editable project downloaded');return}
+    if(type==='print'){window.print();return}
+    if(type==='svg'){download(new Blob([standaloneSVG()],{type:'image/svg+xml'}),filename('svg'));toast('SVG drawing downloaded');return}
+    if(type==='png'){
+      if(project.viewMode==='3d'){
+        render3D();
+        const blob=await new Promise(resolve=>modelCanvas.toBlob(resolve,'image/png'));
+        if(!blob)throw Error('Unable to create image');download(blob,filename('png'));toast('3D view downloaded');return;
+      }
+      const source=standaloneSVG();const blob=new Blob([source],{type:'image/svg+xml'}),url=URL.createObjectURL(blob);
+      try{
+        const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=url});
+        const c=document.createElement('canvas');c.width=Math.min(3500,img.width);c.height=Math.round(c.width*img.height/img.width);
+        const context=c.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,c.width,c.height);context.drawImage(img,0,0,c.width,c.height);
+        const png=await new Promise(resolve=>c.toBlob(resolve,'image/png'));if(!png)throw Error('Unable to create image');
+        download(png,filename('png'));toast('Floor plan image downloaded');
+      }finally{URL.revokeObjectURL(url)}
+    }
+  }
+  const resizeObserver=new ResizeObserver(()=>{updateView();if(project.viewMode==='3d')render3D()});
+  resizeObserver.observe($('stage'));
+  if('serviceWorker' in navigator&&location.protocol==='https:'){
+    addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  }
+  render();if(isMobile())fitDrawing();save();setStatus('Ready to design — edit a floor or explore the whole building in 3D');
+})();

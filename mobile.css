@@ -1,0 +1,171 @@
+/* Phone-first interactions. Desktop keeps the original full studio layout. */
+.mobile-only { display: none; }
+
+@media (max-width: 840px) {
+  :root { font-size: 14px; }
+  body { overscroll-behavior: none; }
+  .app-shell { height: 100dvh; min-height: 0; }
+  .topbar {
+    height: 56px; flex: 0 0 56px; padding: 0 9px; gap: 7px;
+    box-shadow: 0 2px 12px #1d422208;
+  }
+  .brand-mark { width: 32px; height: 32px; border-radius: 9px; }
+  .brand-mark svg { width: 20px; }
+  .project-identity { flex: 1; min-width: 35px; overflow: hidden; }
+  .project-identity .eyebrow { font-size: 8px; letter-spacing: .09em; }
+  .project-identity input {
+    width: 100%; max-width: 100%; font-size: 13px; font-weight: 800;
+    text-overflow: ellipsis; white-space: nowrap; padding: 2px 0;
+  }
+  .header-actions { gap: 1px; flex: 0 0 auto; }
+  .header-actions .subtle-btn, .action-divider { display: none; }
+  .header-actions .icon-btn { width: 30px; height: 39px; font-size: 22px; }
+  .header-actions .primary-btn { font-size: 11px; padding: 11px 11px; min-height: 40px; }
+  .header-actions .chevron { margin-left: 4px; }
+  .mobile-only { display: initial; }
+  .mobile-menu-btn { border: 0; background: transparent; color: #597764; font-size: 24px; }
+  #projectMenu { right: 86px; top: 47px; width: 208px; }
+  #exportMenu { top: 47px; right: 0; width: 230px; }
+
+  .workspace { display: flex; flex-direction: column; position: relative; flex: 1; min-height: 0; }
+  .editor-area { order: 1; flex: 1 1 auto; min-height: 0; }
+  .editor-toolbar {
+    height: 33px; flex: 0 0 33px; padding: 0 12px;
+    border-bottom-color: #edf2ed;
+  }
+  .breadcrumb { gap: 7px; font-size: 9px; letter-spacing: .025em; }
+  .breadcrumb-slash { color: #cbd8ce; }
+  .snap-control { min-height: 30px; font-size: 10px; }
+  .snap-mark { width: 18px; height: 18px; }
+  .floorbar {
+    height: 48px; flex: 0 0 48px; gap: 5px; padding: 0 7px;
+    border-bottom: 1px solid #e3ebe4;
+  }
+  .floor-tabs { gap: 4px; padding: 3px 0; }
+  .floor-tab { min-height: 35px; padding: 7px 10px; font-size: 11px; }
+  .floor-add { min-height: 35px; padding: 6px 7px; font-size: 11px; }
+  .view-modes { padding: 3px; }
+  .view-modes button { min-height: 33px; padding: 6px 9px; font-size: 10px; }
+  .canvas-stage { min-height: 0; }
+  #plan { touch-action: none; }
+  .canvas-hint {
+    display: block !important; top: 9px; padding: 7px 11px;
+    font-size: 10px; max-width: calc(100% - 40px);
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .scale-key { left: 12px; bottom: 16px; font-size: 10px; }
+  .zoom-controls { right: 9px; bottom: 9px; gap: 2px; padding: 3px; }
+  .zoom-controls button { width: 37px; height: 38px; font-size: 23px; }
+  .zoom-controls .fit-btn { font-size: 20px; }
+  .zoom-controls span { width: 44px; font-size: 10px; }
+  .bottom-status { display: none; }
+
+  /* Main thumb dock stays at the bottom, leaving the drawing free. */
+  .tools-panel {
+    order: 2; position: relative; z-index: 10;
+    display: flex; flex-direction: row; align-items: center;
+    flex: 0 0 calc(76px + env(safe-area-inset-bottom, 0px));
+    height: calc(76px + env(safe-area-inset-bottom, 0px));
+    padding: 5px 5px max(5px, env(safe-area-inset-bottom, 0px));
+    gap: 3px; border: 0; border-top: 1px solid #d9e6db;
+    box-shadow: 0 -5px 21px #1b452316; background: #fff;
+    overflow: visible;
+  }
+  .tool-list {
+    display: flex; flex-direction: row; flex: 1 1 auto; min-width: 0;
+    overflow: hidden; gap: 1px;
+  }
+  .tool {
+    flex: 1 1 0; min-width: 0; min-height: 58px; max-height: 66px;
+    padding: 5px 2px; border-radius: 11px;
+    flex-direction: column; gap: 3px; justify-content: center;
+  }
+  .tool-icon { width: auto; font-size: 22px; }
+  .tool-label { font-size: 10px; font-weight: 750; flex: none; }
+  .tool-list .tool:nth-child(n+6) { display: none; }
+  .tools-panel.show-more .tool-list .tool:nth-child(-n+5) { display: none; }
+  .tools-panel.show-more .tool-list .tool:nth-child(n+6) { display: flex; }
+  .mobile-tools-actions { display: flex; align-items: stretch; gap: 1px; flex: 0 0 auto; }
+  .mobile-action-tool {
+    border: 0; background: transparent; color: #657f6e; font-size: 9px;
+    font-weight: 750; min-width: 51px; height: 58px; padding: 4px 3px;
+    border-radius: 10px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 4px;
+  }
+  .mobile-action-tool span { font-size: 22px; height: 25px; }
+  .mobile-action-tool.active { background: #e5f1e8; color: #2d7252; }
+  .mobile-action-tool.tool-engaged { color: #2d7252; }
+  .tools-panel .furniture-grid { display: none; }
+  .tools-panel.show-furniture .tool-list { display: none; }
+  .tools-panel.show-furniture .furniture-grid {
+    display: flex; flex: 1 1 auto; min-width: 0; padding: 0 2px;
+    gap: 4px; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: thin; border: 0;
+  }
+  .tools-panel.show-furniture .furniture-grid button {
+    min-width: 55px; height: 60px; min-height: 60px; flex: 0 0 55px;
+    border-radius: 9px; font-size: 9px; gap: 4px;
+  }
+  .tools-panel.show-furniture .furniture-grid button span { font-size: 19px; }
+
+  /* Pull-up inspector: collapsed until the user selects or asks to edit. */
+  .properties-panel {
+    position: fixed; z-index: 9; order: 3;
+    left: 0; right: 0;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    width: 100%; height: min(65dvh, 520px); max-height: none; min-height: 0;
+    background: #fff; border: 1px solid #dce8dc;
+    border-bottom: 0; border-radius: 18px 18px 0 0;
+    box-shadow: 0 -7px 35px #1c412123;
+    transform: translateY(calc(100% - 43px));
+    transition: transform .22s cubic-bezier(.2,.7,.3,1);
+    overflow: hidden;
+  }
+  .properties-panel.open { transform: translateY(0); }
+  .mobile-sheet-toggle {
+    position: relative; height: 43px; flex: 0 0 43px; width: 100%;
+    display: flex; align-items: center; justify-content: space-between;
+    background: white; padding: 8px 16px 5px; border: 0;
+    color: #436c52; font-size: 12px; font-weight: 800;
+  }
+  .sheet-grip {
+    position: absolute; left: 50%; top: 6px; transform: translateX(-50%);
+    height: 4px; width: 36px; border-radius: 5px; background: #c8d7cb;
+  }
+  #mobileSheetArrow { font-size: 20px; font-weight: 500; }
+  .right-tabs { flex: 0 0 39px; height: 39px; padding: 0 16px; gap: 24px; }
+  .right-tab { font-size: 12px; }
+  .right-content { padding: 14px 18px 24px; flex: 1; overflow-y: auto; }
+  .right-content .inspector-heading { font-size: 23px; }
+  .right-content .inspector-copy { display: block; font-size: 11px; margin-top: 5px; }
+  .right-content .inspector-divider { display: block; margin: 12px 0; }
+  .right-content .selection-illustration { display: none; }
+  .field-input { min-height: 44px; font-size: 16px; padding: 10px 11px; }
+  .field-label { font-size: 12px; }
+  .field-row { gap: 12px; }
+  .field-group { margin-top: 12px; }
+  .delete-btn,.secondary-action { min-height: 43px; font-size: 12px; }
+  .panel-footer { display: none; }
+  .three-d-help { top: auto; bottom: 61px; font-size: 10px; }
+  .three-d-controls { left: 9px; top: 10px; padding: 12px 10px; gap: 10px; font-size: 11px; }
+  .three-d-controls input { width: 17px; height: 17px; }
+  .three-d-controls button { min-height: 30px; }
+  .model-floor-list { top: 10px; right: 8px; }
+  .model-floor-tag { max-width: 121px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+  #toast { bottom: calc(129px + env(safe-area-inset-bottom, 0px)); z-index: 21; }
+}
+
+@media (max-width: 370px) {
+  .header-actions .icon-btn { width: 26px; }
+  .topbar { padding-inline: 6px; }
+  .header-actions .primary-btn { padding-inline: 8px; }
+  .floor-tab { padding-inline: 6px; font-size: 10px; }
+  .floor-add { padding-inline: 5px; }
+  .view-modes button { padding-inline: 6px; }
+  .tool-label { font-size: 9px; }
+  .mobile-action-tool { min-width: 45px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .properties-panel { transition: none; }
+}

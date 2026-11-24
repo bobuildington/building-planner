@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f8f6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="description" content="Create and edit beautiful, measurable home floor plans in your browser.">
+  <title>HousePlan Studio — Floor Plan Editor</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand" aria-label="HousePlan Studio">
+        <div class="brand-mark"><svg viewBox="0 0 28 28" fill="none" aria-hidden="true"><path d="m3 12 11-9 11 9v13H3V12Z" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/><path d="M9 25V14h10v11M3 12h22M14 14v11" stroke="currentColor" stroke-width="1.5"/></svg></div>
+        <span class="brand-name">HOUSEPLAN<span> STUDIO</span></span>
+      </div>
+      <div class="project-identity"><span class="eyebrow">YOUR PROJECT</span><input id="projectName" type="text" aria-label="Project name" value="The Evergreen House" maxlength="70"><span id="saveState" class="saved-indicator">● Saved locally</span></div>
+      <div class="header-actions">
+        <button id="undoBtn" class="icon-btn" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+        <button id="redoBtn" class="icon-btn" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
+        <span class="action-divider"></span>
+        <button id="newBtn" class="subtle-btn"><span class="icon-text">＋</span><span class="desktop-text">New</span></button>
+        <button id="importBtn" class="subtle-btn"><span class="icon-text">↥</span><span class="desktop-text">Open</span></button>
+        <button id="projectMenuBtn" class="mobile-only mobile-menu-btn" aria-label="Project menu" aria-expanded="false">⋯</button>
+        <button id="exportBtn" class="primary-btn">Export <span class="chevron">⌄</span></button>
+        <div id="projectMenu" class="export-menu hidden" role="menu"><button data-project-action="new">＋ New project</button><button data-project-action="open">↥ Open saved project</button><button data-project-action="overview">☷ Project overview</button><button data-project-action="install">⇩ Install on this phone</button></div>
+        <div id="exportMenu" class="export-menu hidden" role="menu">
+          <button data-export="png">Image <small>PNG</small></button>
+          <button data-export="svg">Vector drawing <small>SVG</small></button>
+          <button data-export="json">Editable project <small>JSON</small></button>
+          <button data-export="print">Print or save as PDF <small>PDF</small></button>
+        </div>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="tools-panel" aria-label="Drawing tools">
+        <div class="panel-header"><span class="eyebrow">DESIGN TOOLS</span><span class="shortcut-note">KEY</span></div>
+        <div class="tool-list">
+          <button class="tool active" data-tool="select" title="Select and move (V)"><span class="tool-icon">⌖</span><span class="tool-label">Select</span><kbd>V</kbd></button>
+          <button class="tool" data-tool="room" title="Draw a room (R)"><span class="tool-icon">▣</span><span class="tool-label">Room</span><kbd>R</kbd></button>
+          <button class="tool" data-tool="wall" title="Draw a wall (W)"><span class="tool-icon">╱</span><span class="tool-label">Wall</span><kbd>W</kbd></button>
+          <button class="tool" data-tool="door" title="Place a door (D)"><span class="tool-icon">◩</span><span class="tool-label">Door</span><kbd>D</kbd></button>
+          <button class="tool" data-tool="window" title="Place a window (N)"><span class="tool-icon">▤</span><span class="tool-label">Window</span><kbd>N</kbd></button>
+          <button class="tool" data-tool="label" title="Place a label (T)"><span class="tool-icon">T</span><span class="tool-label">Text label</span><kbd>T</kbd></button>
+          <button class="tool" data-tool="measure" title="Measure distance (M)"><span class="tool-icon">↔</span><span class="tool-label">Measure</span><kbd>M</kbd></button>
+          <button class="tool" data-tool="pan" title="Pan canvas (Space)"><span class="tool-icon">✥</span><span class="tool-label">Pan</span><kbd>H</kbd></button>
+        </div>
+        <div class="mobile-tools-actions mobile-only"><button id="mobileMoreBtn" class="mobile-action-tool" aria-expanded="false"><span>•••</span>More</button><button id="mobileFurnitureBtn" class="mobile-action-tool" aria-expanded="false"><span>▦</span>Furniture</button></div>
+        <div class="tools-separator"></div>
+        <div class="section-title">FURNITURE <span>SELECT &amp; PLACE</span></div>
+        <div class="furniture-grid" id="furniturePalette">
+          <button data-furniture="sofa"><span>▰</span>Sofa</button>
+          <button data-furniture="bed"><span>▥</span>Bed</button>
+          <button data-furniture="table"><span>▦</span>Table</button>
+          <button data-furniture="desk"><span>▣</span>Desk</button>
+          <button data-furniture="sink"><span>◉</span>Sink</button>
+          <button data-furniture="toilet"><span>♧</span>Toilet</button>
+          <button data-furniture="stove"><span>▦</span>Stove</button>
+          <button data-furniture="plant"><span>✿</span>Plant</button>
+        </div>
+        <div class="left-tip"><span>✦</span><p>Tip: Draw a room by clicking and dragging. Select anything to edit its dimensions.</p></div>
+      </aside>
+
+      <section class="editor-area" aria-label="Floor plan canvas">
+        <div class="editor-toolbar"><div class="breadcrumb"><span class="breadcrumb-circle"></span> <span id="floorBreadcrumb">GROUND FLOOR</span> <span class="breadcrumb-slash">/</span> <strong id="modeBreadcrumb">2D FLOOR PLAN</strong></div><div class="editor-toolbar-right"><span class="unit-pill">FT · FEET</span><label class="snap-control" id="snapLabel"><input type="checkbox" id="snapCheck" checked><span class="snap-mark">✓</span> Snap to grid</label></div></div>
+        <div class="floorbar"><div class="floor-tabs" id="floorTabs" role="tablist" aria-label="Project floors"></div><button class="floor-add" id="addFloorBtn" title="Add new floor">＋ Floor</button><div class="view-modes" role="group" aria-label="View mode"><button id="mode2D" class="active">▦ 2D plan</button><button id="mode3D">⬡ 3D building</button></div></div>
+        <div class="canvas-stage" id="stage">
+          <svg id="plan" xmlns="http://www.w3.org/2000/svg" aria-label="Interactive architectural floor plan" role="img" tabindex="0">
+            <defs>
+              <pattern id="smallGrid" width="1" height="1" patternUnits="userSpaceOnUse"><path d="M 1 0 L 0 0 0 1" fill="none" stroke="#e9eee8" stroke-width="0.038"/></pattern>
+              <pattern id="largeGrid" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="url(#smallGrid)"/><path d="M 5 0 L 0 0 0 5" fill="none" stroke="#d6e0d8" stroke-width="0.065"/></pattern>
+            </defs>
+            <rect x="-3000" y="-3000" width="6000" height="6000" fill="#fbfcfa" />
+            <rect x="-3000" y="-3000" width="6000" height="6000" fill="url(#largeGrid)" id="gridLayer"/>
+            <g id="drawing"></g><g id="tempDrawing"></g><g id="interactionLayer"></g>
+          </svg>
+          <div class="canvas-hint" id="canvasHint">Click an object to edit its dimensions</div>
+          <div class="zoom-controls"><button id="zoomOut" aria-label="Zoom out">−</button><span id="zoomText">100%</span><button id="zoomIn" aria-label="Zoom in">+</button><button id="fitBtn" class="fit-btn" title="Fit drawing to view" aria-label="Fit drawing">⛶</button></div>
+          <div class="scale-key"><span class="scale-line"></span><span id="scaleLabel">5 ft</span></div>
+          <div class="three-d-stage hidden" id="threeDStage"><canvas id="modelCanvas" aria-label="Interactive rotatable three-dimensional building model"></canvas><div class="three-d-help">Drag to rotate · Scroll to zoom</div><div class="three-d-controls"><label><input type="checkbox" id="showAllFloors" checked> Show all floors</label><label><input type="checkbox" id="separateFloors"> Separate levels</label><label><input type="checkbox" id="showRoof"> Show roof</label><button id="reset3D">Reset view</button></div><div class="model-floor-list" id="modelFloorList"></div></div>
+        </div>
+        <div class="bottom-status"><div><span class="status-dot"></span><span id="statusMessage">Ready to design</span></div><span id="cursorPosition">X: — &nbsp; Y: —</span></div>
+      </section>
+
+      <aside class="properties-panel" aria-label="Properties">
+        <button id="mobileSheetToggle" class="mobile-sheet-toggle mobile-only" aria-expanded="false"><span class="sheet-grip"></span><span id="mobileSheetTitle">Properties &amp; dimensions</span><span id="mobileSheetArrow">⌃</span></button>
+        <div class="right-tabs"><button class="right-tab active" data-tab="properties">Properties</button><button class="right-tab" data-tab="overview">Overview</button></div>
+        <div class="right-content" id="propertiesContent"></div>
+        <div class="panel-footer"><div class="autosave-icon">✓</div><div><strong>Automatic saving is on</strong><small>Plans are saved in this browser</small></div></div>
+      </aside>
+    </main>
+  </div>
+  <input type="file" id="fileInput" accept=".json,application/json" hidden>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
