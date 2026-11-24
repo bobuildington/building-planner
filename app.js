@@ -12,20 +12,26 @@
   const round = n => Math.round(n*10)/10;
   const nice = n => String(Math.round(n*10)/10).replace(/\.0$/,'');
   const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-  const names = {sofa:'Sofa',bed:'Bed',table:'Dining table',desk:'Desk',sink:'Sink',toilet:'Toilet',stove:'Stove',plant:'Plant',stairs:'Stairs',elevator:'Elevator'};
-  const sizes = {sofa:[6,3],bed:[5,7],table:[5,4],desk:[4,2],sink:[2.5,2],toilet:[2,3],stove:[2.5,2.5],plant:[2,2],stairs:[4,10],elevator:[7,7]};
+  const names = {sofa:'Sofa',bed:'Bed',table:'Dining table',desk:'Desk',sink:'Sink',toilet:'Toilet',stove:'Stove',plant:'Plant',stairs:'Stairs',elevator:'Elevator',rug:'Area rug',ceilingLight:'Ceiling light',pendant:'Pendant lamp',ceilingFan:'Ceiling fan'};
+  const sizes = {sofa:[6,3],bed:[5,7],table:[5,4],desk:[4,2],sink:[2.5,2],toilet:[2,3],stove:[2.5,2.5],plant:[2,2],stairs:[4,10],elevator:[7,7],rug:[7,5],ceilingLight:[2.3,2.3],pendant:[2.8,2.8],ceilingFan:[5,5]};
   const safeColor = color => /^#[0-9a-f]{6}$/i.test(color||'')?color:'#b5bfa7';
   const floorMaterials={default:['Classic pale','#e4f0e3'],oak:['Natural oak','#d8bc91'],walnut:['Dark walnut','#8e725e'],tile:['Soft tile','#d5dcd9'],concrete:['Concrete','#adb7b4'],carpet:['Carpet','#b7c9b2'],stone:['Warm stone','#c5b6a2']};
   const wallMaterials={sage:['Sage','#aecbb7'],white:['Soft white','#e5e6df'],sand:['Sand','#dfc8ad'],blue:['Dusty blue','#acc7d1'],clay:['Warm clay','#ceafa3']};
   const materialKey=(dict,value,fallback)=>Object.hasOwn(dict,value)?value:fallback;
   const finishes=window.HouseRoomFinishes;
+  const architecture=window.HouseRoomArchitecture;
+  const ceilingTypes=new Set(['ceilingLight','pendant','ceilingFan']);
   const roomTextureCache=new Map();
   const defaultFloorPattern={default:'plain',oak:'planks',walnut:'planks',tile:'tile',concrete:'plain',carpet:'carpet',stone:'stone'};
   const floorFinish=e=>finishes.prepare({type:'floor',pattern:finishes.validPattern('floor',e?.floorPattern)?e.floorPattern:defaultFloorPattern[materialKey(floorMaterials,e?.floorMaterial,'default')],base:e?.floorTint||floorMaterials[materialKey(floorMaterials,e?.floorMaterial,'default')][1],accent:e?.floorAccent||'#8e9c89'});
   const wallFinish=e=>finishes.prepare({type:'wall',pattern:finishes.validPattern('wall',e?.wallPattern)?e.wallPattern:'paint',base:e?.wallTint||wallMaterials[materialKey(wallMaterials,e?.wallMaterial,'sage')][1],accent:e?.wallAccent||'#719483'});
+  const wallFinishForSide=(room,side)=>{
+    const common=wallFinish(room),override=room?.wallSides?.[side];
+    return override?finishes.prepare({type:'wall',pattern:override.pattern||common.pattern,base:override.base||common.base,accent:override.accent||common.accent}):common;
+  };
   const objectName = e => e.type==='furniture'?(e.subType==='custom'?e.name||'Custom object':names[e.subType]||'Object'):e.type[0].toUpperCase()+e.type.slice(1);
   const room=(x,y,w,h,name)=>({id:id(),type:'room',x,y,w,h,name});
-  const furniture=(subType,x,y,extra={})=>({id:id(),type:'furniture',subType,x,y,w:sizes[subType]?.[0]||4,h:sizes[subType]?.[1]||3,rotation:0,...(subType==='elevator'?{throughAll:true}:{}),...extra});
+  const furniture=(subType,x,y,extra={})=>({id:id(),type:'furniture',subType,x,y,w:sizes[subType]?.[0]||4,h:sizes[subType]?.[1]||3,rotation:0,...(subType==='elevator'?{throughAll:true}:{}),...(subType==='rug'?{color:'#c49d7b'}:{}),...(ceilingTypes.has(subType)?{drop:subType==='pendant'?2.2:subType==='ceilingFan'?1.2:.3,color:'#f7d999'}:{}),...extra});
   const opening=(type,x,y,angle,width)=>({id:id(),type,x,y,angle,width});
   const sample=()=>{
     const ground={id:id(),name:'Ground floor',items:[
@@ -35,7 +41,8 @@
       opening('door',23,19,0,2.5),opening('door',32,19,0,2.5),
       opening('window',11,7,0,4),opening('window',32,7,0,4),opening('window',7,24,90,4),
       furniture('sofa',9.5,10),furniture('table',29,11),furniture('bed',9,22),
-      furniture('sink',21,25),furniture('toilet',25,25),furniture('desk',30,23)
+      furniture('sink',21,25),furniture('toilet',25,25),furniture('desk',30,23),
+      furniture('rug',11,13),furniture('ceilingFan',15,10),furniture('pendant',30,10)
     ]};
     const upper={id:id(),name:'Second floor',items:[
       room(7,7,16,12,'Primary bedroom'),room(23,7,13,12,'Bedroom 2'),
@@ -43,7 +50,7 @@
       opening('door',14,19,0,3),opening('door',28,19,0,3),
       opening('window',12,7,0,4),opening('window',30,7,0,4),opening('window',36,23,90,4),
       furniture('bed',10,10),furniture('bed',26,10),furniture('sink',10,23),
-      furniture('sofa',24,23),furniture('plant',32,25)
+      furniture('sofa',24,23),furniture('plant',32,25),furniture('ceilingLight',11,13)
     ]};
     return {name:'The Evergreen House',floors:[ground,upper],activeFloorId:ground.id,viewMode:'2d',prefabs:[]};
   };
@@ -54,7 +61,7 @@
   if(!project.floors.some(f=>f.id===project.activeFloorId))project.activeFloorId=project.floors[0].id;
   project.viewMode='2d';
   const floor=()=>project.floors.find(f=>f.id===project.activeFloorId)||project.floors[0];
-  let selected=null, activeTool='select', furnitureTool=null, currentTab='properties';
+  let selected=null, activeTool='select', furnitureTool=null, currentTab='properties',wallScope='all';
   let showUnderlay=true,alignBelow=true,magnetEnabled=true;
   let snapEnabled=true, pointer=null, draft=null, history=[], future=[], saveTimer=null;
   let sheetOpen=false;
@@ -63,7 +70,7 @@
   let pinch=null;
   let camera={cx:22,cy:18.5,zoom:1};
   let orbit={theta:-0.73,phi:0.86,zoom:1};
-  let spin=null, showAll=true, separateFloors=false;
+  let spin=null, showAll=true, separateFloors=false,cutawayWalls=true,xrayWalls=false;
   let cameraMode='orbit',walk={x:15,y:15,z:5.1,yaw:0,pitch:0};
   let hintTimer=null;
   const state=()=>JSON.stringify(project);
@@ -157,7 +164,15 @@
   function showFurniture(e){
     const x=e.x,y=e.y,w=e.w,h=e.h,c=e.subType;
     const shape=[];
-    shape.push(`<rect width="${w}" height="${h}" rx=".24" fill="#dce5d8" stroke="#8fa995" stroke-width=".12"/>`);
+    if(c==='rug'){
+      shape.push(`<rect width="${w}" height="${h}" rx=".22" fill="${safeColor(e.color||'#c49d7b')}" stroke="#b38d6a" stroke-width=".13"/><rect x=".32" y=".32" width="${w-.64}" height="${h-.64}" rx=".12" fill="none" stroke="#fff7e9" stroke-opacity=".8" stroke-width=".16" stroke-dasharray=".25 .11"/>`);
+    }else if(ceilingTypes.has(c)){
+      shape.push(`<circle cx="${w/2}" cy="${h/2}" r="${Math.min(w,h)*.46}" fill="#f9edc7" fill-opacity=".25" stroke="#c2a77d" stroke-width=".11" stroke-dasharray=".24 .16"/>`);
+      if(c==='ceilingFan'){
+        for(let i=0;i<4;i++)shape.push(`<ellipse cx="${w/2}" cy="${h/2-.98}" rx=".32" ry="1.05" transform="rotate(${i*90} ${w/2} ${h/2})" fill="#b2b8a8" stroke="#6e8c77" stroke-width=".1"/>`);
+      }
+      shape.push(`<circle cx="${w/2}" cy="${h/2}" r="${c==='ceilingFan'?'.42':'.65'}" fill="#fce7a7" stroke="#bc9865" stroke-width=".12"/>`);
+    }else shape.push(`<rect width="${w}" height="${h}" rx=".24" fill="#dce5d8" stroke="#8fa995" stroke-width=".12"/>`);
     if(c==='sofa'){shape.push(`<rect x=".2" y=".18" width="${w-.4}" height=".85" rx=".27" fill="#afc6b6" stroke="#95b3a1" stroke-width=".1"/><rect x=".2" y="1.1" width="${w-.4}" height="${h-1.3}" rx=".35" fill="#c6d8cb"/><path d="M ${w/2} 1.2 V ${h-.25}" stroke="#9eb9a8" stroke-width=".08"/>`)}
     else if(c==='bed'){shape.push(`<rect x=".3" y=".3" width="${w-.6}" height="${h-.6}" rx=".25" fill="#f9f9ef" stroke="#acc2b1" stroke-width=".08"/><rect x=".4" y=".5" width="${(w-.9)/2}" height="1.3" rx=".2" fill="#b8d0bb"/><rect x="${w/2+.05}" y=".5" width="${(w-.9)/2}" height="1.3" rx=".2" fill="#b8d0bb"/><path d="M .4 2.1 H ${w-.4}" stroke="#abc2b0" stroke-width=".12"/>`)}
     else if(c==='table'){shape.push(`<rect x=".4" y=".35" width="${w-.8}" height="${h-.7}" rx=".45" fill="#d4b99c" stroke="#ad987a" stroke-width=".12"/><circle cx="${w/2}" cy="${h/2}" r=".48" fill="#f3e7d7"/>`)}
@@ -176,6 +191,7 @@
     }else if(c==='custom'){
       shape.push(`<rect x=".18" y=".18" width="${Math.max(.1,w-.36)}" height="${Math.max(.1,h-.36)}" rx=".15" fill="${safeColor(e.color)}" fill-opacity=".7" stroke="#759281" stroke-width=".11"/>`);
       shape.push(svgText(e.name||'Custom',w/2,h/2,Math.min(.75,Math.max(.3,w/6)),'#315742','font-weight="700"'));
+      if(e.mount==='ceiling')shape.push(svgText('CEILING',w/2,h-.32,.35,'#7e735b','font-weight="800"'));
     }
     return `<g data-id="${e.id}" transform="translate(${x} ${y}) rotate(${e.rotation||0} ${w/2} ${h/2})" class="plan-item">${shape.join('')}<rect width="${w}" height="${h}" rx=".18" fill="transparent" stroke="${selected===e.id?'#408c65':'transparent'}" stroke-width=".15" stroke-dasharray=".28 .18"/></g>`;
   }
@@ -208,7 +224,7 @@
     const all=floor().items;
     const order={room:0,wall:1,furniture:2,measure:3,label:4,door:5,window:5};
     const walls=geometry.collectWallSegments(all).map(s=>`<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="${s.roomIds.length>1?'#426c59':'#3b574c'}" stroke-width=".42" stroke-linecap="square" pointer-events="none"/>`).join('');
-    const other=[...all].filter(e=>e.type!=='room'&&e.type!=='wall').sort((a,b)=>(order[a.type]||0)-(order[b.type]||0)).map(showItem).join('');
+    const other=[...all].filter(e=>e.type!=='room'&&e.type!=='wall').sort((a,b)=>(order[a.type]||0)-(order[b.type]||0)+(a.subType==='rug'?-0.25:0)-(b.subType==='rug'?-0.25:0)).map(showItem).join('');
     drawing.innerHTML=all.filter(e=>e.type==='room').map(showRoom).join('')+walls+other+all.filter(e=>e.type==='wall').map(showWall).join('')+all.filter(e=>e.type==='room').map(showRoomAnnotation).join('');
     renderUnderlay();
     const e=itemById(selected);
@@ -248,8 +264,9 @@
   function patternSelect(key,label,dict,current){return `<div class="field-group"><label class="field-label" for="fld-${key}">${label}</label><select id="fld-${key}" class="field-input" data-field="${key}">${Object.entries(dict).map(([k,v])=>`<option value="${k}" ${current===k?'selected':''}>${esc(v)}</option>`).join('')}</select></div>`}
   function colorField(key,label,color){return `<div class="field-group"><label class="field-label" for="fld-${key}">${label}</label><input id="fld-${key}" class="style-color-input" type="color" data-field="${key}" value="${color}" aria-label="${label}"></div>`}
   function roomStyleFields(e){
-    const fl=floorFinish(e),wl=wallFinish(e);
-    return `<div class="inspector-section-title room-style-heading">ROOM STYLE</div><p class="room-style-note">Give this room its own wallpaper and flooring. Changes appear in the plan and walkthrough.</p><div class="room-style-previews"><div class="room-style-preview"><div class="room-style-sample" style="${finishes.previewCss(fl)}"></div><strong>Floor preview</strong></div><div class="room-style-preview"><div class="room-style-sample" style="${finishes.previewCss(wl)}"></div><strong>Wallpaper preview</strong></div></div><div class="room-style-subtitle">Flooring</div>${materialSelect('floorMaterial','Floor palette',floorMaterials,materialKey(floorMaterials,e.floorMaterial,'default'))}${patternSelect('floorPattern','Floor pattern',finishes.floorPatterns,fl.pattern)}<div class="room-style-colors">${colorField('floorTint','Floor color',fl.base)}${colorField('floorAccent','Floor detail',fl.accent)}</div><div class="room-style-subtitle">Walls & wallpaper</div>${materialSelect('wallMaterial','Wall palette',wallMaterials,materialKey(wallMaterials,e.wallMaterial,'sage'))}${patternSelect('wallPattern','Wallpaper pattern',finishes.wallPatterns,wl.pattern)}<div class="room-style-colors">${colorField('wallTint','Wall color',wl.base)}${colorField('wallAccent','Pattern color',wl.accent)}</div>`;
+    const fl=floorFinish(e),wl=wallScope==='all'?wallFinish(e):wallFinishForSide(e,wallScope);
+    const palette=wallScope==='all'?materialKey(wallMaterials,e.wallMaterial,'sage'):Object.entries(wallMaterials).find(([,v])=>v[1].toLowerCase()===wl.base.toLowerCase())?.[0]||'sage';
+    return `<div class="inspector-section-title room-style-heading">ROOM STYLE</div><p class="room-style-note">Decorate floors and walls independently. Each surface is visible in your 3D walkthrough.</p><div class="room-style-previews"><div class="room-style-preview"><div class="room-style-sample" style="${finishes.previewCss(fl)}"></div><strong>Floor preview</strong></div><div class="room-style-preview"><div class="room-style-sample" style="${finishes.previewCss(wl)}"></div><strong>${wallScope==='all'?'Wallpaper preview':esc(wallScope)+' wall'}</strong></div></div><div class="room-style-subtitle">Flooring</div>${materialSelect('floorMaterial','Floor palette',floorMaterials,materialKey(floorMaterials,e.floorMaterial,'default'))}${patternSelect('floorPattern','Floor pattern',finishes.floorPatterns,fl.pattern)}<div class="room-style-colors">${colorField('floorTint','Floor color',fl.base)}${colorField('floorAccent','Floor detail',fl.accent)}</div><div class="room-style-subtitle">Walls & wallpaper</div><div class="field-group"><label class="field-label" for="fld-wallScope">Style which wall?</label><select id="fld-wallScope" class="field-input" data-field="wallScope"><option value="all" ${wallScope==='all'?'selected':''}>All four walls</option>${architecture.sides.map(s=>`<option value="${s}" ${wallScope===s?'selected':''}>${s[0].toUpperCase()+s.slice(1)} wall</option>`).join('')}</select></div>${materialSelect('wallMaterial','Wall palette',wallMaterials,palette)}${patternSelect('wallPattern','Wallpaper pattern',finishes.wallPatterns,wl.pattern)}<div class="room-style-colors">${colorField('wallTint','Wall color',wl.base)}${colorField('wallAccent','Pattern color',wl.accent)}</div>${wallScope!=='all'?`<p class="room-style-note wall-scope-note">Only the ${esc(wallScope)} wall changes. Shared walls can have a different finish on either side.</p><button class="secondary-action" data-action="resetWallStyle">Use room style on this wall</button>`:''}`;
   }
   function renderProperties(){
     const p=$('propertiesContent'),f=floor(),e=itemById(selected);
@@ -269,6 +286,10 @@
       fields+=`<div class="field-row">${numberField('x','X position (ft)',e.x)}${numberField('y','Y position (ft)',e.y)}</div>`;
       if(e.type!=='label')fields+=`<div class="field-row">${numberField('w','Width (ft)',e.w)}${numberField('h','Depth (ft)',e.h)}</div>`;
       if(e.subType==='custom')fields+=numberField('height','3D height (ft)',e.height||3);
+      if(e.subType==='custom')fields+=`<div class="field-group"><label class="field-label" for="fld-mount">Place this object</label><select id="fld-mount" class="field-input" data-field="mount"><option value="floor" ${e.mount!=='ceiling'?'selected':''}>On the floor</option><option value="ceiling" ${e.mount==='ceiling'?'selected':''}>Mounted to ceiling</option></select></div>`;
+      if(e.subType==='custom'&&e.mount==='ceiling')fields+=numberField('drop','Gap beneath ceiling (ft)',Number.isFinite(e.drop)?e.drop:.2);
+      if(ceilingTypes.has(e.subType))fields+=numberField('drop','Hang below ceiling (ft)',Number.isFinite(e.drop)?e.drop:1);
+      if(e.subType==='rug'||ceilingTypes.has(e.subType))fields+=colorField('color',e.subType==='rug'?'Rug color':'Fixture color',safeColor(e.color||'#f7d999'));
       if(e.subType==='elevator')fields+=`<div class="field-group"><label class="field-label" for="fld-throughAll">Elevator shaft connects</label><select id="fld-throughAll" class="field-input" data-field="throughAll"><option value="all" ${e.throughAll!==false?'selected':''}>All floors above</option><option value="next" ${e.throughAll===false?'selected':''}>Next floor only</option></select><p class="inspector-copy">The shaft and floor openings follow this choice in 3D.</p></div>`;
     }else if(e.type==='door'||e.type==='window'){
       fields+=`<div class="field-row">${numberField('x','X (ft)',e.x)}${numberField('y','Y (ft)',e.y)}</div>${numberField('width','Opening width (ft)',e.width)}${numberField('angle','Wall angle (degrees)',e.angle,1)}`;
@@ -276,7 +297,7 @@
       fields+=`<div class="field-row">${numberField('x1','Start X',e.x1)}${numberField('y1','Start Y',e.y1)}</div><div class="field-row">${numberField('x2','End X',e.x2)}${numberField('y2','End Y',e.y2)}</div>`;
     }
     if(e.type==='furniture')fields+=`<button class="secondary-action" data-action="rotate">↻ Rotate furniture 90°</button>`;
-    p.innerHTML=`<div class="inspector-eyebrow">SELECTED ELEMENT</div><h2 class="inspector-heading">${esc(typeName)}</h2><p class="inspector-copy">Adjust the exact dimensions below. All measurements are in feet.</p>${e.type==='room'?roomStyleFields(e):''}<div class="inspector-divider"></div><div class="inspector-section-title">DIMENSIONS &amp; POSITION</div>${fields}${e.type==='room'? `<div class="stat-row"><span>Floor area</span><strong>${Math.round(e.w*e.h)} ft²</strong></div>`:''}<button class="delete-btn" data-action="delete">Delete ${esc(typeName.toLowerCase())}</button>`;
+    p.innerHTML=`<div class="inspector-eyebrow">SELECTED ELEMENT</div><h2 class="inspector-heading">${esc(typeName)}</h2><p class="inspector-copy">Adjust the exact dimensions below. All measurements are in feet.</p>${e.type==='room'?`<div class="inspector-section-title room-style-heading">CEILING HEIGHT</div>${numberField('ceilingHeight','Height above floor (ft)',architecture.roomHeight(e))}<p class="room-style-note">Raises this room's walls and ceiling-mounted objects in 3D.</p>${roomStyleFields(e)}`:''}<div class="inspector-divider"></div><div class="inspector-section-title">DIMENSIONS &amp; POSITION</div>${fields}${e.type==='room'? `<div class="stat-row"><span>Floor area</span><strong>${Math.round(e.w*e.h)} ft²</strong></div>`:''}<button class="delete-btn" data-action="delete">Delete ${esc(typeName.toLowerCase())}</button>`;
   }
   function render(){
     $('projectName').value=project.name;
@@ -379,11 +400,14 @@
       const kind=prefab?'custom':furnitureTool,dimensions=prefab?[prefab.w,prefab.h]:sizes[kind];
       if(!dimensions){toast('That prefab is no longer available');setTool('select');return}
       const extra=prefab?{w:prefab.w,h:prefab.h,height:prefab.height,name:prefab.name,color:prefab.color,prefabId:prefab.id,category:prefab.category,shape:prefab.shape,...(prefab.mesh?{mesh:prefab.mesh}:{})}:{};
+      if(ceilingTypes.has(kind)&&!floor().items.some(r=>r.type==='room'&&p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h)){
+        toast('Tap inside a room to mount this fixture on its ceiling');return;
+      }
       const before=state(),e=furniture(kind,p.x-dimensions[0]/2,p.y-dimensions[1]/2,extra);
       floor().items.push(e);selected=e.id;changed(before);return;
     }
     const handle=evt.target.closest('[data-handle]')?.getAttribute('data-handle'),target=handle?selected:getTarget(evt);
-    if(target!==selected){selected=target;sheetOpen=!!target;currentTab='properties';render()}
+    if(target!==selected){selected=target;wallScope='all';sheetOpen=!!target;currentTab='properties';render()}
     if(!target){
       if(evt.pointerType==='touch')pointer={kind:'pan',start:{x:evt.clientX,y:evt.clientY},before:{...camera}};
       else pointer=null;
@@ -510,16 +534,31 @@
   $('propertiesContent').addEventListener('change',evt=>{
     const input=evt.target.closest('[data-field]');if(!input)return;
     const before=state();const key=input.dataset.field;
+    if(key==='wallScope'){wallScope=architecture.sides.includes(input.value)?input.value:'all';renderProperties();return}
     if(key==='floorName'){floor().name=input.value.trim()||floor().name}
     else{
       const e=itemById(selected);if(!e)return;
+      const setWallStyle=(field,value)=>{
+        if(wallScope==='all'){e[field==='base'?'wallTint':field==='accent'?'wallAccent':'wallPattern']=value;return}
+        if(!e.wallSides||typeof e.wallSides!=='object')e.wallSides={};
+        const current=wallFinishForSide(e,wallScope);
+        e.wallSides[wallScope]={pattern:current.pattern,base:current.base,accent:current.accent,[field]:value};
+      };
       if(['name','text'].includes(key))e[key]=input.value.trim()||e[key];
       else if(key==='throughAll')e.throughAll=input.value==='all';
+      else if(key==='mount')e.mount=input.value==='ceiling'?'ceiling':'floor';
       else if(key==='floorMaterial'){e.floorMaterial=materialKey(floorMaterials,input.value,'default');delete e.floorTint;if(!finishes.validPattern('floor',e.floorPattern))delete e.floorPattern}
-      else if(key==='wallMaterial'){e.wallMaterial=materialKey(wallMaterials,input.value,'sage');delete e.wallTint}
-      else if(key==='floorPattern'||key==='wallPattern')e[key]=finishes.validPattern(key==='wallPattern'?'wall':'floor',input.value)?input.value:key==='wallPattern'?'paint':'plain';
-      else if(['floorTint','floorAccent','wallTint','wallAccent'].includes(key))e[key]=finishes.hex(input.value,key.startsWith('floor')?'#d8c6ad':'#dfe7dc');
-      else{const v=Number(input.value);if(!Number.isFinite(v))return;let n=round(v);if(['w','h','width','height'].includes(key))n=clamp(n,.5,key==='height'?30:100);e[key]=n}
+      else if(key==='wallMaterial'){
+        const chosen=materialKey(wallMaterials,input.value,'sage');
+        if(wallScope==='all'){e.wallMaterial=chosen;delete e.wallTint}
+        else setWallStyle('base',wallMaterials[chosen][1]);
+      }
+      else if(key==='wallPattern')setWallStyle('pattern',finishes.validPattern('wall',input.value)?input.value:'paint');
+      else if(key==='floorPattern')e.floorPattern=finishes.validPattern('floor',input.value)?input.value:'plain';
+      else if(key==='wallTint'||key==='wallAccent')setWallStyle(key==='wallTint'?'base':'accent',finishes.hex(input.value,'#dfe7dc'));
+      else if(key==='floorTint'||key==='floorAccent')e[key]=finishes.hex(input.value,'#d8c6ad');
+      else if(key==='color')e.color=safeColor(input.value);
+      else{const v=Number(input.value);if(!Number.isFinite(v))return;let n=round(v);if(['w','h','width','height'].includes(key))n=clamp(n,.5,key==='height'?30:100);if(key==='ceilingHeight')n=clamp(n,7.5,20);if(key==='drop')n=clamp(n,.2,5);e[key]=n}
     }
     changed(before);
   });
@@ -535,6 +574,10 @@
     }
     const e=itemById(selected);if(!e)return;
     const before=state();
+    if(b.dataset.action==='resetWallStyle'&&wallScope!=='all'){
+      if(e.wallSides)delete e.wallSides[wallScope];
+      changed(before);renderProperties();return;
+    }
     if(b.dataset.action==='delete'){floor().items=floor().items.filter(x=>x.id!==e.id);selected=null}
     if(b.dataset.action==='rotate')e.rotation=((e.rotation||0)+90)%360;
     changed(before);
@@ -621,7 +664,9 @@
     const visible=cameraMode==='walk'?[floor()]:showAll?project.floors:[floor()];
     const ext=extent(visible.flatMap(f=>f.items));
     const ox=(ext.minX+ext.maxX)/2,oy=(ext.minY+ext.maxY)/2;
-    const cx=ox,cy=oy;const floorSpacing=separateFloors?13:9,upper=visible.length*floorSpacing;
+    const cx=ox,cy=oy,levels=architecture.levelOffsets(project.floors,separateFloors);
+    const floorBase=i=>cameraMode==='walk'||!showAll?0:levels[i];
+    const upper=visible.reduce((m,f)=>{const i=project.floors.findIndex(l=>l.id===f.id);return Math.max(m,floorBase(i)+Math.max(8,...f.items.filter(e=>e.type==='room').map(architecture.roomHeight)))},8);
     const cos=Math.cos(orbit.theta),sin=Math.sin(orbit.theta),sPhi=Math.sin(orbit.phi),cPhi=Math.cos(orbit.phi);
     const transform=(x,y,z)=>{
       const dx=x-cx,dy=y-cy,rx=cos*dx-sin*dy,ry=sin*dx+cos*dy;
@@ -631,13 +676,13 @@
     // Fit to the actual highest walls, not an empty imaginary story above the
     // building. This uses more of a phone's limited 3D viewing area.
     const highestStructure=visible.reduce((highest,f)=>{
-      const i=project.floors.findIndex(l=>l.id===f.id),base=(showAll?i:0)*floorSpacing;
+      const i=project.floors.findIndex(l=>l.id===f.id),base=floorBase(i);
       const extra=f.items.reduce((height,e)=>{
         if(e.type!=='furniture')return height;
         if(e.subType==='custom')return Math.max(height,clamp(Number(e.height)||3,.5,30));
-        if(e.subType==='elevator'&&showAll)return Math.max(height,(geometry.connectionSpan(project.floors,i,e)-i)*floorSpacing);
+        if(e.subType==='elevator'&&showAll)return Math.max(height,levels[geometry.connectionSpan(project.floors,i,e)]-levels[i]);
         return height;
-      },8);
+      },Math.max(8,...f.items.filter(e=>e.type==='room').map(architecture.roomHeight)));
       return Math.max(highest,base+extra);
     },8);
     for(const z of [-1,highestStructure+2])for(const x of [ext.minX-3,ext.maxX+3])for(const y of [ext.minY-3,ext.maxY+3])bounds.push(transform(x,y,z));
@@ -670,7 +715,7 @@
       if(pts.length<3)return;
       polys.push({pts,fill,stroke,width,depth:pts.reduce((s,p)=>s+p.depth,0)/pts.length,kind,finish});
     };
-    const shade=(hex,factor)=>'#'+[1,3,5].map(i=>Math.round(parseInt(hex.slice(i,i+2),16)*factor).toString(16).padStart(2,'0')).join('');
+    const shade=(hex,factor)=>'#'+[1,3,5].map(i=>clamp(Math.round(parseInt(hex.slice(i,i+2),16)*factor),0,255).toString(16).padStart(2,'0')).join('');
     // A complete solid has a top, bottom, and all four sides. Which sides are
     // visible changes as the user orbits the model, so none can be omitted.
     const cuboid=(corners,z,height,fill,stroke='#739586',kind='solid',width=.65,finish=null)=>{
@@ -685,20 +730,20 @@
     };
     // A wall is a thin solid with two faces and jambs. Sections above/below
     // apertures are the only solids drawn, leaving actual see-through holes.
-    const wallPiece=(wall,span,z,shared,finish='#aecbb7',wallpaper=null)=>{
+    const wallPiece=(wall,span,z,plus,minus)=>{
       const a=[wall.x1+wall.ux*span.start,wall.y1+wall.uy*span.start];
       const b=[wall.x1+wall.ux*span.end,wall.y1+wall.uy*span.end];
       const nx=-wall.uy*.17,ny=wall.ux*.17,lo=z+span.bottom,hi=z+span.top;
       const a1=[a[0]+nx,a[1]+ny],b1=[b[0]+nx,b[1]+ny];
       const a2=[a[0]-nx,a[1]-ny],b2=[b[0]-nx,b[1]-ny];
-      const alpha=cameraMode==='walk'?.94:shared?.39:.49;
+      const alpha=cameraMode==='walk'||!xrayWalls?1:.43;
       const tint=(hex,a)=>`rgba(${[1,3,5].map(k=>parseInt(hex.slice(k,k+2),16)).join(',')},${a})`;
-      add([[...a1,lo],[...b1,lo],[...b1,hi],[...a1,hi]],tint(finish,alpha),shade(finish,.7),.36,'wall',wallpaper,[[span.start,span.bottom],[span.end,span.bottom],[span.end,span.top],[span.start,span.top]]);
-      add([[...b2,lo],[...a2,lo],[...a2,hi],[...b2,hi]],tint(shade(finish,.93),alpha),shade(finish,.7),.36,'wall',wallpaper,[[span.end,span.bottom],[span.start,span.bottom],[span.start,span.top],[span.end,span.top]]);
-      add([[...a2,lo],[...a1,lo],[...a1,hi],[...a2,hi]],tint(shade(finish,.75),alpha),'#7d9c87',.25,'jamb');
-      add([[...b1,lo],[...b2,lo],[...b2,hi],[...b1,hi]],tint(shade(finish,.75),alpha),'#7d9c87',.25,'jamb');
-      add([[...a1,hi],[...b1,hi],[...b2,hi],[...a2,hi]],shade(finish,.8),shade(finish,.65),.35,'wall-top');
-      if(span.bottom>.01)add([[...a2,lo],[...b2,lo],[...b1,lo],[...a1,lo]],shade(finish,.88),shade(finish,.7),.3,'wall-sill');
+      add([[...a1,lo],[...b1,lo],[...b1,hi],[...a1,hi]],tint(plus.base,alpha),shade(plus.base,.7),.36,'wall',plus,[[span.start,span.bottom],[span.end,span.bottom],[span.end,span.top],[span.start,span.top]]);
+      add([[...b2,lo],[...a2,lo],[...a2,hi],[...b2,hi]],tint(minus.base,alpha),shade(minus.base,.7),.36,'wall',minus,[[span.end,span.bottom],[span.start,span.bottom],[span.start,span.top],[span.end,span.top]]);
+      add([[...a2,lo],[...a1,lo],[...a1,hi],[...a2,hi]],tint(shade(plus.base,.79),alpha),'#7d9c87',.25,'jamb');
+      add([[...b1,lo],[...b2,lo],[...b2,hi],[...b1,hi]],tint(shade(minus.base,.79),alpha),'#7d9c87',.25,'jamb');
+      add([[...a1,hi],[...b1,hi],[...b2,hi],[...a2,hi]],shade(plus.base,.9),shade(plus.base,.7),.35,'wall-top');
+      if(span.bottom>.01)add([[...a2,lo],[...b2,lo],[...b1,lo],[...a1,lo]],shade(plus.base,.88),shade(plus.base,.7),.3,'wall-sill');
     };
     const rotatedCorners=(e,x=e.x,y=e.y,w=e.w,h=e.h)=>{
       const angle=(e.rotation||0)*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),mx=e.x+e.w/2,my=e.y+e.h/2;
@@ -726,7 +771,8 @@
     };
     const palette=['#e4f0e3','#e8eee2','#e4edf0','#eee9e0','#eff0e4','#e6efe7','#e5edf1'];
     visible.forEach(f=>{
-      const i=project.floors.findIndex(l=>l.id===f.id),z=(cameraMode==='walk'?0:showAll?i:0)*floorSpacing;
+      const i=project.floors.findIndex(l=>l.id===f.id),z=floorBase(i),rooms=f.items.filter(e=>e.type==='room');
+      const tallest=Math.max(8,...rooms.map(architecture.roomHeight));
       const holes=geometry.connectionsAt(project.floors,i).map(({fixture:e})=>{
         const points=rotatedCorners(e),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
         const x=Math.min(...xs),y=Math.min(...ys);
@@ -735,10 +781,19 @@
       // Every opening cuts the wall mesh itself. This also works when a door
       // crosses a T-junction splitting one wall into multiple unique segments.
       const doorLeaves=new Set();
-      for(const wall of geometry.wallSections(f.items,8)){
-        const owner=f.items.find(e=>e.type==='room'&&wall.roomIds.includes(e.id));
-        const finish=wallFinish(owner);
-        wall.sections.forEach(section=>wallPiece(wall,section,z,wall.roomIds.length>1,finish.base,finish));
+      for(const wall of geometry.wallSections(f.items,tallest)){
+        const owners=rooms.filter(e=>wall.roomIds.includes(e.id));
+        if(cameraMode!=='walk'&&cutawayWalls&&owners.length===1&&architecture.isFrontExteriorWall(wall,owners[0],orbit.theta))continue;
+        const fallback=wallFinish(owners[0]),faces={plus:fallback,minus:fallback};
+        for(const owner of owners){
+          const side=architecture.sideOfRoom(owner,wall),face=architecture.roomFaceSign(owner,wall)>0?'plus':'minus';
+          faces[face]=wallFinishForSide(owner,side);
+        }
+        const wallHeight=Math.max(8,...owners.map(architecture.roomHeight));
+        wall.sections.forEach(section=>{
+          const top=Math.min(section.top,wallHeight);
+          if(top>section.bottom+.01)wallPiece(wall,{...section,top},z,faces.plus,faces.minus);
+        });
         for(const opening of wall.openings){
           const point=t=>[wall.x1+wall.ux*t,wall.y1+wall.uy*t];
           const a=point(opening.start),b=point(opening.end);
@@ -760,27 +815,95 @@
           // every floor. An added room must never create dangling edge lines.
           const finish=floorFinish(e);
           for(const part of slabSections(e,holes))cuboid([[part.x,part.y],[part.x+part.w,part.y],[part.x+part.w,part.y+part.h],[part.x,part.y+part.h]],z-.25,.35,finish.base||palette[k%palette.length],'#9db3a3','floor',.3,finish);
+          // A real ceiling appears only while walking inside. The orbit view
+          // stays open-topped so furniture and all levels remain inspectable.
+          if(cameraMode==='walk')add([[x,y,z+architecture.roomHeight(e)],[x+w,y,z+architecture.roomHeight(e)],[x+w,y+h,z+architecture.roomHeight(e)],[x,y+h,z+architecture.roomHeight(e)]],'#f1efe8','#d3d6ce',.25,'ceiling');
         }else if(e.type==='furniture'){
           const {x,y,w,h}=e;
           if(e.subType==='stairs'){
-            const steps=8,rise=floorSpacing/steps;
+            const steps=8,rise=(levels[i+1]===undefined?architecture.roomHeight(rooms[0]):levels[i+1]-levels[i])/steps;
             for(let step=0;step<steps;step++)cuboid(rotatedCorners(e,x,y+h*step/steps,w,h/steps),z+.1,(step+1)*rise,'#c8b9a0','#8b9986','stairs',.6);
           }else if(e.subType==='elevator'){
             const corners=rotatedCorners(e);
             const endFloor=geometry.connectionSpan(project.floors,i,e);
-            const shaftHeight=showAll?Math.max(8,(endFloor-i)*floorSpacing):8;
+            const shaftHeight=showAll?Math.max(8,levels[endFloor]-levels[i]):8;
             cuboid(corners,z+.1,.35,'#b9d7d7','#568a91','elevator',.65);
             for(let side=0;side<4;side++){
               const a=corners[side],b=corners[(side+1)%4];
               add([[...a,z+.45],[...b,z+.45],[...b,z+shaftHeight],[...a,z+shaftHeight]],'rgba(111,169,179,.25)','#568c97',.75,'elevator-shaft');
             }
+          }else if(e.subType==='rug'){
+            const rugColor=safeColor(e.color||'#c49d7b');
+            cuboid(rotatedCorners(e),z+.1,.07,rugColor,shade(rugColor,.71),'rug',.2);
+            const border=rotatedCorners(e,x+.25,y+.25,Math.max(.1,w-.5),Math.max(.1,h-.5));
+            add(border.map(p=>[...p,z+.18]),shade(rugColor,1.11),shade(rugColor,.79),.8,'rug-border');
+            const center=rotatedCorners(e,x+.52,y+.52,Math.max(.1,w-1.04),Math.max(.1,h-1.04));
+            add(center.map(p=>[...p,z+.182]),rugColor,shade(rugColor,.85),.6,'rug-center',finishes.prepare({type:'floor',pattern:'herringbone',base:rugColor,accent:shade(rugColor,.79)}),center);
+          }else if(ceilingTypes.has(e.subType)){
+            const ceiling=architecture.ceilingForFixture(e,rooms),drop=clamp(Number(e.drop)||.3,.2,5);
+            const cx=x+w/2,cy=y+h/2,mountZ=z+ceiling-.08,headZ=z+ceiling-drop;
+            const disc=(radius,height)=>Array.from({length:12},(_,j)=>{const a=j*Math.PI/6;return [cx+Math.cos(a)*radius,cy+Math.sin(a)*radius,height]});
+            const glow=safeColor(e.color||'#f7d999');
+            add(disc(.52,mountZ),'#eeeae0','#abac9f',.35,'ceiling-mount');
+            cuboid([[cx-.09,cy-.09],[cx+.09,cy-.09],[cx+.09,cy+.09],[cx-.09,cy+.09]],headZ,Math.max(.1,mountZ-headZ),'#a49b8c','#827b6b','fixture',.3);
+            if(e.subType==='ceilingFan'){
+              for(let blade=0;blade<4;blade++){
+                const a=(e.rotation||0)*Math.PI/180+blade*Math.PI/2,ux=Math.cos(a),uy=Math.sin(a),vx=-uy,vy=ux;
+                const quad=[[.38,-.31],[Math.min(w,h)*.46,-.27],[Math.min(w,h)*.46,.27],[.38,.31]].map(([r,t])=>[cx+ux*r+vx*t,cy+uy*r+vy*t]);
+                cuboid(quad,headZ-.12,.13,'#b7a68b','#8c806f','fan-blade',.25);
+              }
+              add(disc(.48,headZ+.04),'#b5ad9f','#877f73',.5,'fan-hub');
+              add(disc(.35,headZ-.13),glow,'#c9a96a',.25,'fan-light');
+            }else if(e.subType==='pendant'){
+              const radius=Math.min(w,h)*.43,top=disc(.3,headZ+.55),rim=disc(radius,headZ);
+              for(let j=0;j<12;j++)add([top[j],top[(j+1)%12],rim[(j+1)%12],rim[j]],j%2?'#c9b8a0':'#ddc8a7','#ad9d85',.22,'pendant-shade');
+              add([...rim].reverse(),glow,'#d3b177',.35,'light');
+            }else{
+              add(disc(1.05,headZ+.08),'#eee7d6','#b9a98d',.45,'light-rim');
+              add(disc(.86,headZ-.01),glow,'#d1b279',.3,'light');
+            }
           }else{
-            const hz=e.subType==='custom'?clamp(Number(e.height)||3,.5,30):e.subType==='plant'?2.7:e.subType==='bed'||e.subType==='sofa'?2:2.8;
+            const roomCeiling=architecture.ceilingForFixture(e,rooms),isMounted=e.subType==='custom'&&e.mount==='ceiling';
+            const hz=e.subType==='custom'?clamp(Number(e.height)||3,.5,isMounted?roomCeiling-.4:30):e.subType==='plant'?2.7:e.subType==='bed'||e.subType==='sofa'?2:2.8;
+            const baseZ=isMounted?z+roomCeiling-hz-clamp(Number(e.drop)||.2,.2,5):z+.1;
             const topColor=e.subType==='custom'?safeColor(e.color):e.subType==='plant'?'#719b71':e.subType==='table'||e.subType==='desk'?'#cfae88':e.subType==='bed'?'#eff5e9':'#a2bda7';
-            const objectPart=(u,v,uw,vh,base,height,color=topColor)=>cuboid(rotatedCorners(e,e.x+u*e.w,e.y+v*e.h,uw*e.w,vh*e.h),z+.1+base*hz,Math.max(.05,height*hz),color,'#789887','furniture',.4);
-            if(e.subType==='custom'&&e.mesh&&window.HouseMeshImport?.validMesh(e.mesh)){
+            const objectPart=(u,v,uw,vh,base,height,color=topColor)=>cuboid(rotatedCorners(e,e.x+u*e.w,e.y+v*e.h,uw*e.w,vh*e.h),baseZ+base*hz,Math.max(.05,height*hz),color,'#789887','furniture',.4);
+            if(e.subType==='sofa'){
+              objectPart(.03,.07,.94,.85,.12,.30,'#b4c9ba');
+              objectPart(.03,.02,.94,.28,.44,.55,'#94b2a1');
+              objectPart(.02,.09,.17,.85,.35,.48,'#9eb9a8');
+              objectPart(.81,.09,.17,.85,.35,.48,'#9eb9a8');
+              objectPart(.2,.34,.29,.56,.43,.16,'#d1dfd1');
+              objectPart(.51,.34,.29,.56,.43,.16,'#c6d9ca');
+            }else if(e.subType==='bed'){
+              objectPart(0,.04,1,.92,.08,.28,'#9baf9d');
+              objectPart(.04,.07,.92,.86,.29,.40,'#f7f5ed');
+              objectPart(.04,.34,.92,.58,.68,.15,'#e6efdd');
+              objectPart(.08,.11,.37,.19,.69,.17,'#d4e0d0');
+              objectPart(.55,.11,.37,.19,.69,.17,'#d4e0d0');
+              objectPart(0,0,1,.12,.09,.88,'#8b9d8c');
+            }else if(e.subType==='sink'){
+              objectPart(0,0,1,1,0,.77,'#b5c5bb');
+              objectPart(.05,.05,.90,.90,.78,.12,'#f1f4ed');
+              objectPart(.18,.14,.64,.62,.90,.035,'#b7d4d1');
+              objectPart(.45,.10,.1,.13,.94,.06,'#879e9b');
+            }else if(e.subType==='toilet'){
+              objectPart(.06,.02,.88,.25,0,1,'#dbe7df');
+              objectPart(.18,.30,.64,.63,0,.49,'#f1f5ef');
+              objectPart(.22,.36,.56,.53,.5,.14,'#fafcf6');
+              objectPart(.36,.49,.28,.25,.65,.025,'#c5dfda');
+            }else if(e.subType==='stove'){
+              objectPart(0,0,1,1,0,.84,'#8f9e97');
+              objectPart(.03,.03,.94,.94,.85,.10,'#e0e4df');
+              for(const u of [.18,.62])for(const v of [.15,.59])objectPart(u,v,.20,.2,.95,.02,'#526d62');
+            }else if(e.subType==='plant'){
+              objectPart(.26,.26,.48,.48,0,.34,'#b49a76');
+              objectPart(.18,.21,.64,.60,.33,.32,'#629d72');
+              objectPart(.05,.05,.46,.52,.59,.30,'#73ad7f');
+              objectPart(.45,.21,.48,.54,.61,.31,'#548e65');
+            }else if(e.subType==='custom'&&e.mesh&&window.HouseMeshImport?.validMesh(e.mesh)){
               const angle=(e.rotation||0)*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),mx=e.x+e.w/2,my=e.y+e.h/2;
-              const points=e.mesh.vertices.map(v=>{const x=e.x+v[0]*e.w,y=e.y+v[1]*e.h,dx=x-mx,dy=y-my;return [mx+dx*c-dy*s,my+dx*s+dy*c,z+.1+v[2]*hz]});
+              const points=e.mesh.vertices.map(v=>{const x=e.x+v[0]*e.w,y=e.y+v[1]*e.h,dx=x-mx,dy=y-my;return [mx+dx*c-dy*s,my+dx*s+dy*c,baseZ+v[2]*hz]});
               for(const triangle of e.mesh.faces){
                 const p=triangle.map(j=>points[j]);
                 const ax=p[1][0]-p[0][0],ay=p[1][1]-p[0][1],az=p[1][2]-p[0][2],bx=p[2][0]-p[0][0],by=p[2][1]-p[0][1],bz=p[2][2]-p[0][2];
@@ -797,14 +920,14 @@
             }else if(e.subType==='custom'&&e.shape==='cylinder'){
               const centerX=e.x+e.w/2,centerY=e.y+e.h/2,angle=(e.rotation||0)*Math.PI/180;
               const rim=Array.from({length:12},(_,j)=>{const t=j*Math.PI/6+angle;return [centerX+Math.cos(t)*e.w/2,centerY+Math.sin(t)*e.h/2]});
-              add(rim.map(p=>[...p,z+.1+hz]),topColor,shade(topColor,.75),.35,'furniture');
-              for(let j=0;j<12;j++){const a=rim[j],b=rim[(j+1)%12];add([[...a,z+.1],[...b,z+.1],[...b,z+.1+hz],[...a,z+.1+hz]],shade(topColor,.72+.2*Math.sin(j*.5)**2),shade(topColor,.64),.3,'furniture')}
+              add(rim.map(p=>[...p,baseZ+hz]),topColor,shade(topColor,.75),.35,'furniture');
+              for(let j=0;j<12;j++){const a=rim[j],b=rim[(j+1)%12];add([[...a,baseZ],[...b,baseZ],[...b,baseZ+hz],[...a,baseZ+hz]],shade(topColor,.72+.2*Math.sin(j*.5)**2),shade(topColor,.64),.3,'furniture')}
             }else if(e.subType==='custom'&&e.shape==='cabinet'){
               objectPart(0,0,1,1,0,1);objectPart(.06,.01,.88,.035,.13,.75,shade(topColor,1));
             }else if(e.subType==='table'||e.subType==='desk'){
               objectPart(.03,.03,.94,.94,.72,.15);
               for(const u of [.08,.82])for(const v of [.08,.82])objectPart(u,v,.1,.1,0,.74,shade(topColor,.74));
-            }else cuboid(rotatedCorners(e),z+.1,hz,topColor,'#6e9680','furniture');
+            }else cuboid(rotatedCorners(e),baseZ,hz,topColor,'#6e9680','furniture');
           }
         }
       });
@@ -867,6 +990,7 @@
   function occupiedInWalk(x,y,clearance){
     return floor().items.some(e=>{
       if(e.type!=='furniture'||['stairs','elevator'].includes(e.subType))return false;
+      if(e.mount==='ceiling'||ceilingTypes.has(e.subType)||e.subType==='rug')return false;
       // The camera is at eye height: a sofa or bed should not force the
       // viewpoint against the wall. Only full-height fixtures block it.
       if((e.subType==='custom'?Number(e.height)||3:3)<4.5)return false;
@@ -967,6 +1091,8 @@
   modelCanvas.addEventListener('wheel',e=>{e.preventDefault();if(cameraMode==='walk')walkStep(e.deltaY<0?'forward':'back');else{orbit.zoom=clamp(orbit.zoom*(e.deltaY<0?1.11:.9),.5,3);render3D()}},{passive:false});
   $('showAllFloors').addEventListener('change',e=>{showAll=e.target.checked;render3D()});
   $('separateFloors').addEventListener('change',e=>{separateFloors=e.target.checked;render3D()});
+  $('cutawayWalls').addEventListener('change',e=>{cutawayWalls=e.target.checked;render3D()});
+  $('xrayWalls').addEventListener('change',e=>{xrayWalls=e.target.checked;render3D()});
   $('reset3D').addEventListener('click',()=>{orbit={theta:-.73,phi:.86,zoom:1};render3D()});
   function activateProject(next){
     project=next;if(!Array.isArray(project.prefabs))project.prefabs=[];
@@ -1095,7 +1221,7 @@
     const floors=obj.floors.map(f=>{
       const items=f.items.map(item=>{
         if(!['room','wall','door','window','furniture','measure','label'].includes(item.type))throw Error('Unsupported drawing item');
-        for(const k of ['x','y','w','h','x1','y1','x2','y2','width','height','angle','rotation'])if(k in item&&(!Number.isFinite(item[k])||Math.abs(item[k])>100000))throw Error('Invalid measurements');
+        for(const k of ['x','y','w','h','x1','y1','x2','y2','width','height','angle','rotation','ceilingHeight','drop'])if(k in item&&(!Number.isFinite(item[k])||Math.abs(item[k])>100000))throw Error('Invalid measurements');
         if((item.type==='room'||item.type==='furniture')&&(!Number.isFinite(item.x)||!Number.isFinite(item.y)||!Number.isFinite(item.w)||!Number.isFinite(item.h)||item.w<.5||item.h<.5))throw Error('Invalid room or object');
         const clean={...item,id:id()};
         if('name' in clean)clean.name=String(clean.name).slice(0,70);
@@ -1103,10 +1229,18 @@
         if('color' in clean)clean.color=safeColor(clean.color);
         if(clean.type==='room'){
           clean.floorMaterial=materialKey(floorMaterials,clean.floorMaterial,'default');clean.wallMaterial=materialKey(wallMaterials,clean.wallMaterial,'sage');
+          if('ceilingHeight'in clean)clean.ceilingHeight=architecture.roomHeight(clean);
           if('floorPattern'in clean)clean.floorPattern=finishes.validPattern('floor',clean.floorPattern)?clean.floorPattern:'plain';
           if('wallPattern'in clean)clean.wallPattern=finishes.validPattern('wall',clean.wallPattern)?clean.wallPattern:'paint';
           for(const key of ['floorTint','floorAccent','wallTint','wallAccent'])if(key in clean)clean[key]=finishes.hex(clean[key],key.startsWith('floor')?'#d8c6ad':'#dfe7dc');
+          if(clean.wallSides&&typeof clean.wallSides==='object'){
+            clean.wallSides=Object.fromEntries(architecture.sides.filter(side=>clean.wallSides[side]&&typeof clean.wallSides[side]==='object').map(side=>{
+              const style=clean.wallSides[side];
+              return [side,{pattern:finishes.validPattern('wall',style.pattern)?style.pattern:'paint',base:finishes.hex(style.base,'#e5e6df'),accent:finishes.hex(style.accent,'#719483')}];
+            }));
+          }
         }
+        if(clean.type==='furniture'&&ceilingTypes.has(clean.subType))clean.drop=clamp(Number(clean.drop)||.3,.2,5);
         if(clean.type==='furniture'&&clean.subType==='custom'){
           clean.shape=['box','table','shelf','cabinet','cylinder'].includes(clean.shape)?clean.shape:'box';
           if(clean.mesh&&!window.HouseMeshImport.validMesh(clean.mesh))throw Error('Invalid imported 3D mesh');

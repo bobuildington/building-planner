@@ -1,5 +1,6 @@
 /* Phone-first interactions. Desktop keeps the original full studio layout. */
 .room-style-heading { color:#376e52; margin-bottom:5px; }
+.wall-scope-note { margin-top:10px; }
 .room-style-note { margin:0 0 12px; color:#829789; line-height:1.5; font-size:11px; }
 .room-style-previews { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:16px; }
 .room-style-preview { min-width:0; border:1px solid #dfeae1; padding:6px; border-radius:11px; background:#fcfdfb; }
@@ -244,7 +245,7 @@
   .delete-btn,.secondary-action { min-height: 43px; font-size: 12px; }
   .panel-footer { display: none; }
   .three-d-help { top: auto; bottom: 61px; font-size: 10px; }
-  .three-d-controls { left: 9px; top: 10px; padding: 12px 10px; gap: 10px; font-size: 11px; }
+  .three-d-controls { left: 9px; top: 10px; padding: 10px; gap: 8px; font-size: 11px; max-height: min(68dvh, 345px); overflow-y:auto; }
   .three-d-controls input { width: 17px; height: 17px; }
   .three-d-controls button { min-height: 30px; }
   .three-d-controls .walk-switch { min-height:38px; }

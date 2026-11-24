@@ -12,7 +12,7 @@
   <meta name="description" content="Create and edit beautiful, measurable home floor plans in your browser.">
   <title>HousePlan Studio — Floor Plan Editor</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="mobile.css?v=roomstyle1">
+  <link rel="stylesheet" href="mobile.css?v=interior2">
 </head>
 <body>
   <div class="app-shell">
@@ -68,6 +68,10 @@
           <button data-furniture="toilet"><span>♧</span>Toilet</button>
           <button data-furniture="stove"><span>▦</span>Stove</button>
           <button data-furniture="plant"><span>✿</span>Plant</button>
+          <button data-furniture="rug"><span>▧</span>Area rug</button>
+          <button data-furniture="ceilingLight"><span>☀</span>Ceiling light</button>
+          <button data-furniture="pendant"><span>✧</span>Pendant lamp</button>
+          <button data-furniture="ceilingFan"><span>✳</span>Ceiling fan</button>
         </div>
         <div class="left-tip"><span>✦</span><p>Tip: Draw a room by clicking and dragging. Select anything to edit its dimensions.</p></div>
       </aside>
@@ -97,7 +101,7 @@
           <div class="three-d-stage hidden" id="threeDStage">
             <canvas id="modelCanvas" aria-label="Interactive three-dimensional building model and walkthrough"></canvas>
             <div class="three-d-help">Drag to rotate · Scroll to zoom</div>
-            <div class="three-d-controls" id="orbitControls"><label><input type="checkbox" id="showAllFloors" checked> Show all floors</label><label><input type="checkbox" id="separateFloors"> Separate levels</label><button id="reset3D">Reset view</button><button id="enterWalk" class="walk-switch">⇢ Walk inside</button></div>
+            <div class="three-d-controls" id="orbitControls"><label><input type="checkbox" id="showAllFloors" checked> Show all floors</label><label><input type="checkbox" id="separateFloors"> Separate levels</label><label><input type="checkbox" id="cutawayWalls" checked> Cutaway front walls</label><label><input type="checkbox" id="xrayWalls"> X-ray walls</label><button id="reset3D">Reset view</button><button id="enterWalk" class="walk-switch">⇢ Walk inside</button></div>
             <div class="walk-toolbar hidden" id="walkToolbar" aria-label="Walkthrough controls"><div class="walk-heading"><strong>Inside the building</strong><button type="button" id="exitWalk">✕ Exit walk</button></div><label>Explore floor <select id="walkFloor" aria-label="Walkthrough floor"></select></label><div class="walk-pad"><button type="button" data-walk="left" aria-label="Turn left">↶</button><button type="button" data-walk="forward" aria-label="Move forward">↑</button><button type="button" data-walk="right" aria-label="Turn right">↷</button><button type="button" data-walk="strafeLeft" aria-label="Step left">←</button><button type="button" data-walk="back" aria-label="Move backward">↓</button><button type="button" data-walk="strafeRight" aria-label="Step right">→</button></div><small>Hold arrows to keep moving. Drag to look. W/S move, A/D turn, Q/E sidestep.</small></div>
             <div class="model-floor-list" id="modelFloorList"></div>
           </div>
@@ -141,8 +145,9 @@
   <script src="project-store.js?v=update1"></script>
   <script src="mesh-import.js?v=update3"></script>
   <script src="room-finishes.js?v=roomstyle1"></script>
+  <script src="room-architecture.js?v=interior2"></script>
   <script src="depth-render.js?v=roomstyle1"></script>
   <script src="walk-navigation.js?v=doorfix1"></script>
-  <script src="app.js?v=roomstyle1"></script>
+  <script src="app.js?v=interior2"></script>
 </body>
 </html>

@@ -6,6 +6,12 @@ A free, mobile-first, installable home floor-plan editor. Everything runs in you
 
 Choose a room in the 2D plan and open its **Properties** panel. The **Room Style** section gives every room its own flooring palette, wood planks, herringbone, tile, stone, carpet, terrazzo, or checkerboard. Walls can use solid paint, stripes, geometric diamonds, brickwork, panels, botanical wallpaper, or dots. Pick the main and accent colors and see the preview swatches update. The room's floors show their patterns in the 2D plan, and the floors and wallpaper appear in the 3D building and indoor walkthrough. Styles are saved inside the project, included in JSON exports, and work offline without external texture downloads. Existing projects retain their original material palettes.
 
+### Room interiors and ceilings
+
+The building now opens in a **solid, cutaway** 3D view instead of translucent ghost walls. **Cutaway front walls** is enabled by default for visibility from outside; turn it off for complete walls, or enable **X-ray walls** for the earlier transparent inspection mode. The indoor walkthrough always keeps solid walls, and includes real ceiling surfaces. Each room has an independent **Ceiling height** setting (7.5–20 feet). Raising a tall room automatically moves floors above it up to avoid overlap.
+
+Choose **Style which wall?** in a room's Properties to give the north, east, south, or west wall its own wallpaper and colors; shared walls can be decorated differently on either side. Place **Area rug**, **Ceiling light**, **Pendant lamp**, or **Ceiling fan** from the Objects palette. Ceiling fixtures snap to the ceiling height of the room containing them, and can be adjusted by how far they hang down. Custom prefabs can also be switched to **Mounted to ceiling** and given a hanging offset. Sofas, beds, bathroom fixtures, plants, and appliances have more detailed 3D parts. Existing designs remain readable and unchanged until edited.
+
 ## Features
 
 - Draw, select, resize, name, and measure rooms and walls on a feet-based grid.
@@ -17,7 +23,7 @@ Choose a room in the 2D plan and open its **Properties** panel. The **Room Style
 - Create, rename, duplicate, and switch between floors.
 - On upper floors, toggle a dashed blue outline of the floor below, magnetically **Align below**, or tap **Trace rooms** to copy missing room/wall outlines as editable elements. Trace never removes the existing layout and can be undone.
 - Create named prefab objects with categories, custom dimensions, colors, and procedural 3D shapes (box, table, shelf, cabinet, or cylinder). Optionally import a local **OBJ** or uncompressed **glTF 2.0 GLB** mesh. Models are included in JSON exports and backups.
-- Set a floor finish and wall finish on each room in the Properties inspector; the 2D floor colors and 3D room surfaces update together. For shared walls, the first connected room supplies the finish.
+- Set floor, wallpaper, and individual wall finishes on each room in the Properties inspector; the 2D floor colors and 3D room surfaces update together. Shared walls can show different finishes on opposite sides.
 - See all floors in an interactive 3D building model with thicker wall faces, framed wall openings, and connected vertical shafts. Rotate, zoom, separate levels, or isolate one floor.
 - Tap **Walk inside** in 3D to enter a first-person walkthrough. On phones, drag to look and use the directional arrows; on desktop use **W/A/S/D** or arrow keys. Switch the walkthrough floor in its menu, then select **Exit walk** to return to the building view. The walkthrough uses a separate per-pixel depth buffer for correctly overlapping walls, floors, doors, and furniture; the whole-building orbit uses its original transparent preview renderer.
 - For precise doorway navigation, tap for small movements or hold an arrow to keep walking. **←/→** step sideways without turning; the curved arrows rotate. On a keyboard, **Q/E** sidestep, **W/S** move, and **A/D** rotate. The camera can cross touching room boundaries and short doorway gaps without sticking on invisible margins.
