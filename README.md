@@ -2,6 +2,10 @@
 
 A free, mobile-first, installable home floor-plan editor. Everything runs in your browser: no account, API key, database, or paid hosting service is required.
 
+### Room styling
+
+Choose a room in the 2D plan and open its **Properties** panel. The **Room Style** section gives every room its own flooring palette, wood planks, herringbone, tile, stone, carpet, terrazzo, or checkerboard. Walls can use solid paint, stripes, geometric diamonds, brickwork, panels, botanical wallpaper, or dots. Pick the main and accent colors and see the preview swatches update. The room's floors show their patterns in the 2D plan, and the floors and wallpaper appear in the 3D building and indoor walkthrough. Styles are saved inside the project, included in JSON exports, and work offline without external texture downloads. Existing projects retain their original material palettes.
+
 ## Features
 
 - Draw, select, resize, name, and measure rooms and walls on a feet-based grid.

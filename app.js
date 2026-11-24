@@ -18,6 +18,11 @@
   const floorMaterials={default:['Classic pale','#e4f0e3'],oak:['Natural oak','#d8bc91'],walnut:['Dark walnut','#8e725e'],tile:['Soft tile','#d5dcd9'],concrete:['Concrete','#adb7b4'],carpet:['Carpet','#b7c9b2'],stone:['Warm stone','#c5b6a2']};
   const wallMaterials={sage:['Sage','#aecbb7'],white:['Soft white','#e5e6df'],sand:['Sand','#dfc8ad'],blue:['Dusty blue','#acc7d1'],clay:['Warm clay','#ceafa3']};
   const materialKey=(dict,value,fallback)=>Object.hasOwn(dict,value)?value:fallback;
+  const finishes=window.HouseRoomFinishes;
+  const roomTextureCache=new Map();
+  const defaultFloorPattern={default:'plain',oak:'planks',walnut:'planks',tile:'tile',concrete:'plain',carpet:'carpet',stone:'stone'};
+  const floorFinish=e=>finishes.prepare({type:'floor',pattern:finishes.validPattern('floor',e?.floorPattern)?e.floorPattern:defaultFloorPattern[materialKey(floorMaterials,e?.floorMaterial,'default')],base:e?.floorTint||floorMaterials[materialKey(floorMaterials,e?.floorMaterial,'default')][1],accent:e?.floorAccent||'#8e9c89'});
+  const wallFinish=e=>finishes.prepare({type:'wall',pattern:finishes.validPattern('wall',e?.wallPattern)?e.wallPattern:'paint',base:e?.wallTint||wallMaterials[materialKey(wallMaterials,e?.wallMaterial,'sage')][1],accent:e?.wallAccent||'#719483'});
   const objectName = e => e.type==='furniture'?(e.subType==='custom'?e.name||'Custom object':names[e.subType]||'Object'):e.type[0].toUpperCase()+e.type.slice(1);
   const room=(x,y,w,h,name)=>({id:id(),type:'room',x,y,w,h,name});
   const furniture=(subType,x,y,extra={})=>({id:id(),type:'furniture',subType,x,y,w:sizes[subType]?.[0]||4,h:sizes[subType]?.[1]||3,rotation:0,...(subType==='elevator'?{throughAll:true}:{}),...extra});
@@ -136,7 +141,8 @@
   function showRoom(e){
     // Room fills remain individually selectable; their wall outlines are
     // generated once for the entire floor by collectWallSegments().
-    return `<g data-id="${e.id}" class="plan-item"><rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="${floorMaterials[materialKey(floorMaterials,e.floorMaterial,'default')][1]}" fill-opacity=".82" stroke="${e.id===selected?'#438e68':'none'}" stroke-width=".12" stroke-dasharray=".4 .2"/><rect x="${e.x+.26}" y="${e.y+.26}" width="${Math.max(0,e.w-.52)}" height="${Math.max(0,e.h-.52)}" fill="none" stroke="#b3c8b7" stroke-width=".045" pointer-events="none"/></g>`;
+    const patternId='finish-'+String(e.id).replace(/[^a-z0-9_-]/gi,'');
+    return `<g data-id="${e.id}" class="plan-item"><defs>${finishes.svgFloorPattern(patternId,floorFinish(e))}</defs><rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="url(#${patternId})" fill-opacity=".92" stroke="${e.id===selected?'#438e68':'none'}" stroke-width=".12" stroke-dasharray=".4 .2"/><rect x="${e.x+.26}" y="${e.y+.26}" width="${Math.max(0,e.w-.52)}" height="${Math.max(0,e.h-.52)}" fill="none" stroke="#b3c8b7" stroke-width=".045" pointer-events="none"/></g>`;
   }
   function showRoomAnnotation(e){return `<g pointer-events="none"><rect x="${e.x+.75}" y="${e.y+.74}" width="${Math.min(e.w-1.4,Math.max(4,e.name.length*.43+1.4))}" height="2.2" rx=".26" fill="#f6faf5" fill-opacity=".88"/><text x="${e.x+1.1}" y="${e.y+1.58}" fill="#446457" font-family="Inter,Segoe UI,Arial,sans-serif" font-weight="700" font-size=".72">${esc(e.name)}</text><text x="${e.x+1.1}" y="${e.y+2.42}" fill="#8da797" font-family="Inter,Segoe UI,Arial,sans-serif" font-size=".57">${nice(e.w)}' × ${nice(e.h)}'</text></g>`}
   function showWall(e){
@@ -239,6 +245,12 @@
   function textField(key,label,value){return `<div class="field-group"><label class="field-label" for="fld-${key}">${label}</label><input id="fld-${key}" class="field-input" type="text" data-field="${key}" value="${esc(value)}" maxlength="70"></div>`}
   function area(f){return f.items.filter(i=>i.type==='room').reduce((s,i)=>s+i.w*i.h,0)}
   function materialSelect(key,label,dict,current){return `<div class="field-group"><label class="field-label" for="fld-${key}">${label}</label><select id="fld-${key}" class="field-input" data-field="${key}">${Object.entries(dict).map(([k,v])=>`<option value="${k}" ${current===k?'selected':''}>${esc(v[0])}</option>`).join('')}</select></div>`}
+  function patternSelect(key,label,dict,current){return `<div class="field-group"><label class="field-label" for="fld-${key}">${label}</label><select id="fld-${key}" class="field-input" data-field="${key}">${Object.entries(dict).map(([k,v])=>`<option value="${k}" ${current===k?'selected':''}>${esc(v)}</option>`).join('')}</select></div>`}
+  function colorField(key,label,color){return `<div class="field-group"><label class="field-label" for="fld-${key}">${label}</label><input id="fld-${key}" class="style-color-input" type="color" data-field="${key}" value="${color}" aria-label="${label}"></div>`}
+  function roomStyleFields(e){
+    const fl=floorFinish(e),wl=wallFinish(e);
+    return `<div class="inspector-section-title room-style-heading">ROOM STYLE</div><p class="room-style-note">Give this room its own wallpaper and flooring. Changes appear in the plan and walkthrough.</p><div class="room-style-previews"><div class="room-style-preview"><div class="room-style-sample" style="${finishes.previewCss(fl)}"></div><strong>Floor preview</strong></div><div class="room-style-preview"><div class="room-style-sample" style="${finishes.previewCss(wl)}"></div><strong>Wallpaper preview</strong></div></div><div class="room-style-subtitle">Flooring</div>${materialSelect('floorMaterial','Floor palette',floorMaterials,materialKey(floorMaterials,e.floorMaterial,'default'))}${patternSelect('floorPattern','Floor pattern',finishes.floorPatterns,fl.pattern)}<div class="room-style-colors">${colorField('floorTint','Floor color',fl.base)}${colorField('floorAccent','Floor detail',fl.accent)}</div><div class="room-style-subtitle">Walls & wallpaper</div>${materialSelect('wallMaterial','Wall palette',wallMaterials,materialKey(wallMaterials,e.wallMaterial,'sage'))}${patternSelect('wallPattern','Wallpaper pattern',finishes.wallPatterns,wl.pattern)}<div class="room-style-colors">${colorField('wallTint','Wall color',wl.base)}${colorField('wallAccent','Pattern color',wl.accent)}</div>`;
+  }
   function renderProperties(){
     const p=$('propertiesContent'),f=floor(),e=itemById(selected);
     if(currentTab==='overview'){
@@ -251,7 +263,7 @@
     }
     const typeName=objectName(e);
     let fields='';
-    if(e.type==='room')fields+=textField('name','Room name',e.name)+materialSelect('floorMaterial','Floor finish',floorMaterials,materialKey(floorMaterials,e.floorMaterial,'default'))+materialSelect('wallMaterial','Wall finish',wallMaterials,materialKey(wallMaterials,e.wallMaterial,'sage'));
+    if(e.type==='room')fields+=textField('name','Room name',e.name);
     if(e.type==='label')fields+=textField('text','Label text',e.text);
     if(e.type==='room'||e.type==='furniture'||e.type==='label'){
       fields+=`<div class="field-row">${numberField('x','X position (ft)',e.x)}${numberField('y','Y position (ft)',e.y)}</div>`;
@@ -264,7 +276,7 @@
       fields+=`<div class="field-row">${numberField('x1','Start X',e.x1)}${numberField('y1','Start Y',e.y1)}</div><div class="field-row">${numberField('x2','End X',e.x2)}${numberField('y2','End Y',e.y2)}</div>`;
     }
     if(e.type==='furniture')fields+=`<button class="secondary-action" data-action="rotate">↻ Rotate furniture 90°</button>`;
-    p.innerHTML=`<div class="inspector-eyebrow">SELECTED ELEMENT</div><h2 class="inspector-heading">${esc(typeName)}</h2><p class="inspector-copy">Adjust the exact dimensions below. All measurements are in feet.</p><div class="inspector-divider"></div><div class="inspector-section-title">DIMENSIONS &amp; POSITION</div>${fields}${e.type==='room'? `<div class="stat-row"><span>Floor area</span><strong>${Math.round(e.w*e.h)} ft²</strong></div>`:''}<button class="delete-btn" data-action="delete">Delete ${esc(typeName.toLowerCase())}</button>`;
+    p.innerHTML=`<div class="inspector-eyebrow">SELECTED ELEMENT</div><h2 class="inspector-heading">${esc(typeName)}</h2><p class="inspector-copy">Adjust the exact dimensions below. All measurements are in feet.</p>${e.type==='room'?roomStyleFields(e):''}<div class="inspector-divider"></div><div class="inspector-section-title">DIMENSIONS &amp; POSITION</div>${fields}${e.type==='room'? `<div class="stat-row"><span>Floor area</span><strong>${Math.round(e.w*e.h)} ft²</strong></div>`:''}<button class="delete-btn" data-action="delete">Delete ${esc(typeName.toLowerCase())}</button>`;
   }
   function render(){
     $('projectName').value=project.name;
@@ -503,8 +515,10 @@
       const e=itemById(selected);if(!e)return;
       if(['name','text'].includes(key))e[key]=input.value.trim()||e[key];
       else if(key==='throughAll')e.throughAll=input.value==='all';
-      else if(key==='floorMaterial')e.floorMaterial=materialKey(floorMaterials,input.value,'default');
-      else if(key==='wallMaterial')e.wallMaterial=materialKey(wallMaterials,input.value,'sage');
+      else if(key==='floorMaterial'){e.floorMaterial=materialKey(floorMaterials,input.value,'default');delete e.floorTint;if(!finishes.validPattern('floor',e.floorPattern))delete e.floorPattern}
+      else if(key==='wallMaterial'){e.wallMaterial=materialKey(wallMaterials,input.value,'sage');delete e.wallTint}
+      else if(key==='floorPattern'||key==='wallPattern')e[key]=finishes.validPattern(key==='wallPattern'?'wall':'floor',input.value)?input.value:key==='wallPattern'?'paint':'plain';
+      else if(['floorTint','floorAccent','wallTint','wallAccent'].includes(key))e[key]=finishes.hex(input.value,key.startsWith('floor')?'#d8c6ad':'#dfe7dc');
       else{const v=Number(input.value);if(!Number.isFinite(v))return;let n=round(v);if(['w','h','width','height'].includes(key))n=clamp(n,.5,key==='height'?30:100);e[key]=n}
     }
     changed(before);
@@ -644,21 +658,22 @@
       for(let j=0;j<vertices.length;j++){
         const prev=vertices[(j+vertices.length-1)%vertices.length],curr=vertices[j];
         const a=prev.depth>=near,b=curr.depth>=near;
-        if(a!==b){const t=(near-prev.depth)/(curr.depth-prev.depth);result.push({x:prev.x+(curr.x-prev.x)*t,y:prev.y+(curr.y-prev.y)*t,depth:near})}
+        if(a!==b){const t=(near-prev.depth)/(curr.depth-prev.depth);result.push({x:prev.x+(curr.x-prev.x)*t,y:prev.y+(curr.y-prev.y)*t,depth:near,u:prev.u+(curr.u-prev.u)*t,v:prev.v+(curr.v-prev.v)*t})}
         if(b)result.push(curr);
       }
       return result;
     };
     const polys=[];
-    const add=(points,fill,stroke='#739586',width=1,kind='face')=>{
-      const pts=cameraMode==='walk'?clipNear(points.map(p=>walkthroughPoint(...p))).map(p=>({x:cw/2+p.x*Math.min(cw,ch)*.74/p.depth,y:ch/2-p.y*Math.min(cw,ch)*.74/p.depth,depth:p.depth})):points.map(p=>projectP(...p));
+    const add=(points,fill,stroke='#739586',width=1,kind='face',finish=null,uvs=null)=>{
+      const world=points.map((p,i)=>({...(cameraMode==='walk'?walkthroughPoint(...p):projectP(...p)),u:uvs?.[i]?.[0],v:uvs?.[i]?.[1]}));
+      const pts=cameraMode==='walk'?clipNear(world).map(p=>({x:cw/2+p.x*Math.min(cw,ch)*.74/p.depth,y:ch/2-p.y*Math.min(cw,ch)*.74/p.depth,depth:p.depth,u:p.u,v:p.v})):world;
       if(pts.length<3)return;
-      polys.push({pts,fill,stroke,width,depth:pts.reduce((s,p)=>s+p.depth,0)/pts.length,kind});
+      polys.push({pts,fill,stroke,width,depth:pts.reduce((s,p)=>s+p.depth,0)/pts.length,kind,finish});
     };
     const shade=(hex,factor)=>'#'+[1,3,5].map(i=>Math.round(parseInt(hex.slice(i,i+2),16)*factor).toString(16).padStart(2,'0')).join('');
     // A complete solid has a top, bottom, and all four sides. Which sides are
     // visible changes as the user orbits the model, so none can be omitted.
-    const cuboid=(corners,z,height,fill,stroke='#739586',kind='solid',width=.65)=>{
+    const cuboid=(corners,z,height,fill,stroke='#739586',kind='solid',width=.65,finish=null)=>{
       const bottom=corners.map(([x,y])=>[x,y,z]);
       const top=corners.map(([x,y])=>[x,y,z+height]);
       add([...bottom].reverse(),shade(fill,.68),stroke,width,kind);
@@ -666,11 +681,11 @@
         const next=(i+1)%4;
         add([bottom[i],bottom[next],top[next],top[i]],shade(fill,factor),stroke,width,kind);
       });
-      add(top,fill,stroke,width,kind);
+      add(top,fill,stroke,width,kind,finish,finish?corners:null);
     };
     // A wall is a thin solid with two faces and jambs. Sections above/below
     // apertures are the only solids drawn, leaving actual see-through holes.
-    const wallPiece=(wall,span,z,shared,finish='#aecbb7')=>{
+    const wallPiece=(wall,span,z,shared,finish='#aecbb7',wallpaper=null)=>{
       const a=[wall.x1+wall.ux*span.start,wall.y1+wall.uy*span.start];
       const b=[wall.x1+wall.ux*span.end,wall.y1+wall.uy*span.end];
       const nx=-wall.uy*.17,ny=wall.ux*.17,lo=z+span.bottom,hi=z+span.top;
@@ -678,8 +693,8 @@
       const a2=[a[0]-nx,a[1]-ny],b2=[b[0]-nx,b[1]-ny];
       const alpha=cameraMode==='walk'?.94:shared?.39:.49;
       const tint=(hex,a)=>`rgba(${[1,3,5].map(k=>parseInt(hex.slice(k,k+2),16)).join(',')},${a})`;
-      add([[...a1,lo],[...b1,lo],[...b1,hi],[...a1,hi]],tint(finish,alpha),shade(finish,.7),.36,'wall');
-      add([[...b2,lo],[...a2,lo],[...a2,hi],[...b2,hi]],tint(shade(finish,.93),alpha),shade(finish,.7),.36,'wall');
+      add([[...a1,lo],[...b1,lo],[...b1,hi],[...a1,hi]],tint(finish,alpha),shade(finish,.7),.36,'wall',wallpaper,[[span.start,span.bottom],[span.end,span.bottom],[span.end,span.top],[span.start,span.top]]);
+      add([[...b2,lo],[...a2,lo],[...a2,hi],[...b2,hi]],tint(shade(finish,.93),alpha),shade(finish,.7),.36,'wall',wallpaper,[[span.end,span.bottom],[span.start,span.bottom],[span.start,span.top],[span.end,span.top]]);
       add([[...a2,lo],[...a1,lo],[...a1,hi],[...a2,hi]],tint(shade(finish,.75),alpha),'#7d9c87',.25,'jamb');
       add([[...b1,lo],[...b2,lo],[...b2,hi],[...b1,hi]],tint(shade(finish,.75),alpha),'#7d9c87',.25,'jamb');
       add([[...a1,hi],[...b1,hi],[...b2,hi],[...a2,hi]],shade(finish,.8),shade(finish,.65),.35,'wall-top');
@@ -722,8 +737,8 @@
       const doorLeaves=new Set();
       for(const wall of geometry.wallSections(f.items,8)){
         const owner=f.items.find(e=>e.type==='room'&&wall.roomIds.includes(e.id));
-        const finish=wallMaterials[materialKey(wallMaterials,owner?.wallMaterial,'sage')][1];
-        wall.sections.forEach(section=>wallPiece(wall,section,z,wall.roomIds.length>1,finish));
+        const finish=wallFinish(owner);
+        wall.sections.forEach(section=>wallPiece(wall,section,z,wall.roomIds.length>1,finish.base,finish));
         for(const opening of wall.openings){
           const point=t=>[wall.x1+wall.ux*t,wall.y1+wall.uy*t];
           const a=point(opening.start),b=point(opening.end);
@@ -743,7 +758,8 @@
           const {x,y,w,h}=e;
           // Slabs follow the actual room footprint, not the bounding box of
           // every floor. An added room must never create dangling edge lines.
-          for(const part of slabSections(e,holes))cuboid([[part.x,part.y],[part.x+part.w,part.y],[part.x+part.w,part.y+part.h],[part.x,part.y+part.h]],z-.25,.35,floorMaterials[materialKey(floorMaterials,e.floorMaterial,'default')][1]||palette[k%palette.length],'#9db3a3','floor',.3);
+          const finish=floorFinish(e);
+          for(const part of slabSections(e,holes))cuboid([[part.x,part.y],[part.x+part.w,part.y],[part.x+part.w,part.y+part.h],[part.x,part.y+part.h]],z-.25,.35,finish.base||palette[k%palette.length],'#9db3a3','floor',.3,finish);
         }else if(e.type==='furniture'){
           const {x,y,w,h}=e;
           if(e.subType==='stairs'){
@@ -809,10 +825,40 @@
     }else{
       polys.sort((a,b)=>b.depth-a.depth);
       ctx3d.lineJoin='round';
+      const paintFinish=(p)=>{
+        if(!p.finish||!p.pts.every(v=>Number.isFinite(v.u)&&Number.isFinite(v.v)))return false;
+        const [a,b,c]=p.pts,du=b.u-a.u,dv=b.v-a.v,eu=c.u-a.u,ev=c.v-a.v,det=du*ev-eu*dv;
+        if(Math.abs(det)<.0001)return false;
+        const xu=((b.x-a.x)*ev-(c.x-a.x)*dv)/det,xv=((c.x-a.x)*du-(b.x-a.x)*eu)/det;
+        const yu=((b.y-a.y)*ev-(c.y-a.y)*dv)/det,yv=((c.y-a.y)*du-(b.y-a.y)*eu)/det;
+        const tx=a.x-xu*a.u-xv*a.v,ty=a.y-yu*a.u-yv*a.v;
+        const f=finishes.prepare(p.finish),key=[f.type,f.pattern,f.base,f.accent].join('|');
+        let pattern=roomTextureCache.get(key);
+        if(!pattern){
+          // A 32-foot tile avoids obvious repeated seams within most rooms.
+          const tex=document.createElement('canvas');tex.width=tex.height=384;
+          const tc=tex.getContext('2d'),data=tc.createImageData(384,384);
+          for(let y=0;y<384;y++)for(let x=0;x<384;x++){
+            const rgb=finishes.sample(f,x/12,y/12),offset=(y*384+x)*4;
+            data.data[offset]=rgb>>16&255;data.data[offset+1]=rgb>>8&255;data.data[offset+2]=rgb&255;data.data[offset+3]=255;
+          }
+          tc.putImageData(data,0,0);
+          pattern=ctx3d.createPattern(tex,'repeat');
+          if(roomTextureCache.size>40)roomTextureCache.clear();
+          roomTextureCache.set(key,pattern);
+        }
+        const us=p.pts.map(v=>v.u),vs=p.pts.map(v=>v.v),umin=Math.min(...us),vmin=Math.min(...vs),umax=Math.max(...us),vmax=Math.max(...vs);
+        const alpha=Number(/rgba\([^)]*,\s*([\d.]+)\)/i.exec(p.fill)?.[1]||1);
+        ctx3d.save();ctx3d.clip();ctx3d.globalAlpha=alpha;
+        ctx3d.transform(xu/12,yu/12,xv/12,yv/12,tx,ty);
+        ctx3d.fillStyle=pattern;ctx3d.fillRect(umin*12-2,vmin*12-2,(umax-umin)*12+4,(vmax-vmin)*12+4);
+        ctx3d.restore();
+        return true;
+      };
       for(const p of polys){
         ctx3d.beginPath();
         p.pts.forEach((v,i)=>i?ctx3d.lineTo(v.x,v.y):ctx3d.moveTo(v.x,v.y));
-        ctx3d.closePath();ctx3d.fillStyle=p.fill;ctx3d.fill();
+        ctx3d.closePath();if(!paintFinish(p)){ctx3d.fillStyle=p.fill;ctx3d.fill()}
         ctx3d.strokeStyle=p.stroke;ctx3d.lineWidth=p.width;ctx3d.stroke();
       }
     }
@@ -1055,7 +1101,12 @@
         if('name' in clean)clean.name=String(clean.name).slice(0,70);
         if('text' in clean)clean.text=String(clean.text).slice(0,70);
         if('color' in clean)clean.color=safeColor(clean.color);
-        if(clean.type==='room'){clean.floorMaterial=materialKey(floorMaterials,clean.floorMaterial,'default');clean.wallMaterial=materialKey(wallMaterials,clean.wallMaterial,'sage')}
+        if(clean.type==='room'){
+          clean.floorMaterial=materialKey(floorMaterials,clean.floorMaterial,'default');clean.wallMaterial=materialKey(wallMaterials,clean.wallMaterial,'sage');
+          if('floorPattern'in clean)clean.floorPattern=finishes.validPattern('floor',clean.floorPattern)?clean.floorPattern:'plain';
+          if('wallPattern'in clean)clean.wallPattern=finishes.validPattern('wall',clean.wallPattern)?clean.wallPattern:'paint';
+          for(const key of ['floorTint','floorAccent','wallTint','wallAccent'])if(key in clean)clean[key]=finishes.hex(clean[key],key.startsWith('floor')?'#d8c6ad':'#dfe7dc');
+        }
         if(clean.type==='furniture'&&clean.subType==='custom'){
           clean.shape=['box','table','shelf','cabinet','cylinder'].includes(clean.shape)?clean.shape:'box';
           if(clean.mesh&&!window.HouseMeshImport.validMesh(clean.mesh))throw Error('Invalid imported 3D mesh');

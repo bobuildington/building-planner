@@ -1,4 +1,16 @@
 /* Phone-first interactions. Desktop keeps the original full studio layout. */
+.room-style-heading { color:#376e52; margin-bottom:5px; }
+.room-style-note { margin:0 0 12px; color:#829789; line-height:1.5; font-size:11px; }
+.room-style-previews { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:16px; }
+.room-style-preview { min-width:0; border:1px solid #dfeae1; padding:6px; border-radius:11px; background:#fcfdfb; }
+.room-style-sample { height:70px; border-radius:7px; border:1px solid #ffffffaa; box-shadow:inset 0 0 0 1px #22372a10; }
+.room-style-preview strong { display:block; margin:8px 4px 3px; font-size:10px; color:#4d725d; font-weight:750; }
+.room-style-subtitle { margin:16px 0 8px; color:#486b56; font-size:12px; font-weight:850; padding-bottom:6px; border-bottom:1px solid #e6eee6; }
+.room-style-colors { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.room-style-colors .field-group { min-width:0; }
+.style-color-input { display:block; width:100%; height:43px; padding:5px; border:1px solid #d6e5d9; border-radius:8px; background:#f9fbf8; cursor:pointer; }
+.style-color-input::-webkit-color-swatch-wrapper { padding:0; }
+.style-color-input::-webkit-color-swatch { border:0; border-radius:5px; }
 .mobile-only { display: none; }
 .floor-guides { position:absolute; z-index:4; top:10px; left:10px; display:flex; gap:5px; max-width:calc(100% - 20px); overflow-x:auto; padding:2px; scrollbar-width:thin; }
 .floor-guides.hidden { display:none; }
@@ -217,6 +229,10 @@
   .right-tabs { flex: 0 0 39px; height: 39px; padding: 0 16px; gap: 24px; }
   .right-tab { font-size: 12px; }
   .right-content { padding: 14px 18px 24px; flex: 1; overflow-y: auto; }
+  .room-style-sample { height:58px; }
+  .room-style-preview strong { font-size:11px; }
+  .room-style-note { display:block !important; }
+  .room-style-colors .field-group { margin-top:8px; }
   .right-content .inspector-heading { font-size: 23px; }
   .right-content .inspector-copy { display: block; font-size: 11px; margin-top: 5px; }
   .right-content .inspector-divider { display: block; margin: 12px 0; }
