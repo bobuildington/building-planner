@@ -894,7 +894,9 @@
       if(modelPinch&&modelTouches.size>=2){const p=[...modelTouches.values()];orbit.zoom=clamp(modelPinch.zoom*Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)/modelPinch.distance,.5,3);render3D();return}
     }
     if(!spin)return;
-    if(cameraMode==='walk'){walk.yaw=spin.theta-(e.clientX-spin.x)*.007;walk.pitch=clamp(spin.phi-(e.clientY-spin.y)*.006,-.6,.6)}
+    // Direct-touch look: moving a finger up moves the scene up, and moving
+    // it down moves the scene down. Do not change the orbit camera's drag.
+    if(cameraMode==='walk'){walk.yaw=spin.theta-(e.clientX-spin.x)*.007;walk.pitch=clamp(spin.phi+(e.clientY-spin.y)*.006,-.6,.6)}
     else{orbit.theta=spin.theta+(e.clientX-spin.x)*.012;orbit.phi=clamp(spin.phi+(e.clientY-spin.y)*.009,.25,1.48)}
     requestModelRender();
   });
