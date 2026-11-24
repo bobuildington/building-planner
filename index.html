@@ -85,7 +85,7 @@
           <div class="canvas-hint" id="canvasHint">Click an object to edit its dimensions</div>
           <div class="zoom-controls"><button id="zoomOut" aria-label="Zoom out">−</button><span id="zoomText">100%</span><button id="zoomIn" aria-label="Zoom in">+</button><button id="fitBtn" class="fit-btn" title="Fit drawing to view" aria-label="Fit drawing">⛶</button></div>
           <div class="scale-key"><span class="scale-line"></span><span id="scaleLabel">5 ft</span></div>
-          <div class="three-d-stage hidden" id="threeDStage"><canvas id="modelCanvas" aria-label="Interactive rotatable three-dimensional building model"></canvas><div class="three-d-help">Drag to rotate · Scroll to zoom</div><div class="three-d-controls"><label><input type="checkbox" id="showAllFloors" checked> Show all floors</label><label><input type="checkbox" id="separateFloors"> Separate levels</label><label><input type="checkbox" id="showRoof"> Show roof</label><button id="reset3D">Reset view</button></div><div class="model-floor-list" id="modelFloorList"></div></div>
+          <div class="three-d-stage hidden" id="threeDStage"><canvas id="modelCanvas" aria-label="Interactive rotatable three-dimensional building model"></canvas><div class="three-d-help">Drag to rotate · Scroll to zoom</div><div class="three-d-controls"><label><input type="checkbox" id="showAllFloors" checked> Show all floors</label><label><input type="checkbox" id="separateFloors"> Separate levels</label><button id="reset3D">Reset view</button></div><div class="model-floor-list" id="modelFloorList"></div></div>
         </div>
         <div class="bottom-status"><div><span class="status-dot"></span><span id="statusMessage">Ready to design</span></div><span id="cursorPosition">X: — &nbsp; Y: —</span></div>
       </section>
@@ -100,6 +100,6 @@
   </div>
   <input type="file" id="fileInput" accept=".json,application/json" hidden>
   <div id="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=3dfix1"></script>
+  <script src="app.js?v=noroof1"></script>
 </body>
 </html>

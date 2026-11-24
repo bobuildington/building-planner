@@ -53,15 +53,24 @@
   let pinch=null;
   let camera={cx:22,cy:18.5,zoom:1};
   let orbit={theta:-0.73,phi:0.86,zoom:1};
-  let spin=null, showAll=true, showRoof=false, separateFloors=false;
+  let spin=null, showAll=true, separateFloors=false;
   let hintTimer=null;
   const state=()=>JSON.stringify(project);
   function changed(previous){if(previous!==state()){history.push(previous);if(history.length>80)history.shift();future=[];save();render();return true}return false}
+  function persistNow(){
+    if(saveTimer===null)return;
+    clearTimeout(saveTimer);saveTimer=null;
+    try{localStorage.setItem(STORAGE,JSON.stringify(project));$('saveState').textContent='● Saved locally'}
+    catch(e){$('saveState').textContent='● Save unavailable'}
+  }
   function save(){
     $('saveState').textContent='● Saving…';
     clearTimeout(saveTimer);
-    saveTimer=setTimeout(()=>{try{localStorage.setItem(STORAGE,JSON.stringify(project));$('saveState').textContent='● Saved locally'}catch(e){$('saveState').textContent='● Save unavailable'}},200);
+    saveTimer=setTimeout(persistNow,200);
   }
+  // Phones may suspend a PWA before the normal save debounce finishes.
+  addEventListener('pagehide',persistNow);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistNow()});
   function toast(message){const t=$('toast');t.textContent=message;t.classList.add('show');clearTimeout(hintTimer);hintTimer=setTimeout(()=>t.classList.remove('show'),2600)}
   function setStatus(message){$('statusMessage').textContent=message}
   function snap(v){return snapEnabled?Math.round(v*2)/2:round(v)}
@@ -439,12 +448,15 @@
     const rect=modelCanvas.getBoundingClientRect();
     if(!rect.width||!rect.height)return;
     const dpr=Math.min(devicePixelRatio||1,2);
-    modelCanvas.width=Math.round(rect.width*dpr);modelCanvas.height=Math.round(rect.height*dpr);
+    const pixelWidth=Math.round(rect.width*dpr),pixelHeight=Math.round(rect.height*dpr);
+    // Resizing a canvas reallocates its backing store; only do it when needed.
+    if(modelCanvas.width!==pixelWidth)modelCanvas.width=pixelWidth;
+    if(modelCanvas.height!==pixelHeight)modelCanvas.height=pixelHeight;
     const cw=rect.width,ch=rect.height;ctx3d.setTransform(dpr,0,0,dpr,0,0);ctx3d.clearRect(0,0,cw,ch);
     const visible=showAll?project.floors:[floor()];
-    const ext=extent(project.floors.map(f=>f.items).flat());
+    const ext=extent(visible.flatMap(f=>f.items));
     const ox=(ext.minX+ext.maxX)/2,oy=(ext.minY+ext.maxY)/2;
-    const cx=ox,cy=oy;const floorSpacing=separateFloors?13:9,upper=project.floors.length*floorSpacing;
+    const cx=ox,cy=oy;const floorSpacing=separateFloors?13:9,upper=visible.length*floorSpacing;
     const cos=Math.cos(orbit.theta),sin=Math.sin(orbit.theta),sPhi=Math.sin(orbit.phi),cPhi=Math.cos(orbit.phi);
     const transform=(x,y,z)=>{
       const dx=x-cx,dy=y-cy,rx=cos*dx-sin*dy,ry=sin*dx+cos*dy;
@@ -481,7 +493,7 @@
     };
     const palette=['#e4f0e3','#e8eee2','#e4edf0','#eee9e0','#eff0e4','#e6efe7','#e5edf1'];
     visible.forEach(f=>{
-      const i=project.floors.findIndex(l=>l.id===f.id),z=i*floorSpacing;
+      const i=project.floors.findIndex(l=>l.id===f.id),z=(showAll?i:0)*floorSpacing;
       f.items.forEach((e,k)=>{
         if(e.type==='room'){
           const {x,y,w,h}=e;
@@ -518,12 +530,6 @@
         }
       });
     });
-    if(showRoof&&showAll){
-      const x=ext.minX-.8,y=ext.minY-.8,w=ext.maxX-ext.minX+1.6,h=ext.maxY-ext.minY+1.6,z=(project.floors.length-1)*floorSpacing+9;
-      const mid=x+w/2;
-      add([[x,y,z],[mid,y,z+5],[mid,y+h,z+5],[x,y+h,z]],'rgba(92,126,111,.76)','#527963',1.5,'roof');
-      add([[mid,y,z+5],[x+w,y,z],[x+w,y+h,z],[mid,y+h,z+5]],'rgba(120,154,132,.76)','#527963',1.5,'roof');
-    }
     polys.sort((a,b)=>b.depth-a.depth);
     ctx3d.lineJoin='round';
     for(const p of polys){
@@ -556,7 +562,6 @@
   modelCanvas.addEventListener('wheel',e=>{e.preventDefault();orbit.zoom=clamp(orbit.zoom*(e.deltaY<0?1.11:.9),.5,3);render3D()},{passive:false});
   $('showAllFloors').addEventListener('change',e=>{showAll=e.target.checked;render3D()});
   $('separateFloors').addEventListener('change',e=>{separateFloors=e.target.checked;render3D()});
-  $('showRoof').addEventListener('change',e=>{showRoof=e.target.checked;render3D()});
   $('reset3D').addEventListener('click',()=>{orbit={theta:-.73,phi:.86,zoom:1};render3D()});
   $('newBtn').addEventListener('click',()=>{
     if(!confirm('Create a new blank project? Your current project can be downloaded first using Export → Editable project.'))return;

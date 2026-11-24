@@ -7,7 +7,7 @@ A free, mobile-first, installable home floor-plan editor. Everything runs in you
 - Draw, select, resize, name, and measure rooms and walls on a feet-based grid.
 - Place doors, windows, labels, and furniture.
 - Create, rename, duplicate, and switch between floors.
-- See all floors in an interactive 3D building model. Rotate, zoom, separate levels, isolate one floor, or show the roof.
+- See all floors in an interactive 3D building model. Rotate, zoom, separate levels, or isolate one floor.
 - Phone controls: bottom drawing toolbar, furniture palette, expandable properties sheet, two-finger pan/zoom, and 3D pinch zoom.
 - Undo/redo, local autosave, and PNG, SVG, editable JSON, or print-to-PDF export.
 - Installable Progressive Web App (PWA) with offline caching after the first online visit.
