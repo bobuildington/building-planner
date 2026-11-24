@@ -56,7 +56,21 @@
   let spin=null, showAll=true, showRoof=false, separateFloors=false;
   let hintTimer=null;
   let installPrompt=null;
+  let installBannerDismissed=false;
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e});
+  addEventListener('appinstalled',()=>{installPrompt=null;installBannerDismissed=true;syncInstallUI();toast('HousePlan installed successfully')});
+  function syncInstallUI(){
+    const installed=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+    $('installBanner').classList.toggle('hidden',!isMobile()||installed||installBannerDismissed||sheetOpen);
+  }
+  function closeInstallGuide(){$('installGuide').classList.add('hidden')}
+  async function requestInstall(){
+    if(installPrompt){
+      const prompt=installPrompt;installPrompt=null;
+      try{await prompt.prompt();const choice=await prompt.userChoice;if(choice?.outcome==='accepted'){installBannerDismissed=true;syncInstallUI()}}
+      catch(e){$('installGuide').classList.remove('hidden')}
+    }else $('installGuide').classList.remove('hidden');
+  }
   const state=()=>JSON.stringify(project);
   function changed(previous){if(previous!==state()){history.push(previous);if(history.length>80)history.shift();future=[];save();render();return true}return false}
   function save(){
@@ -206,6 +220,7 @@
     $('mobileSheetToggle').setAttribute('aria-expanded',String(sheetOpen&&isMobile()));
     $('mobileSheetArrow').textContent=sheetOpen?'⌄':'⌃';
     $('mobileSheetTitle').textContent=currentTab==='overview'?'Project overview':e?(e.type==='room'?e.name:e.type==='furniture'?names[e.subType]:e.type[0].toUpperCase()+e.type.slice(1))+' · Edit details':'Properties & dimensions';
+    syncInstallUI();
   }
   function closeMobileToolMenus(){
     document.querySelector('.tools-panel').classList.remove('show-more','show-furniture');
@@ -558,11 +573,13 @@
     if(b.dataset.projectAction==='new')$('newBtn').click();
     if(b.dataset.projectAction==='open')$('importBtn').click();
     if(b.dataset.projectAction==='overview'){currentTab='overview';sheetOpen=true;render()}
-    if(b.dataset.projectAction==='install'){
-      if(installPrompt){installPrompt.prompt();installPrompt.userChoice.then(()=>installPrompt=null)}
-      else toast('Open your browser menu and choose Install app or Add to Home screen');
-    }
+    if(b.dataset.projectAction==='install')requestInstall();
   });
+  $('installBannerBtn').addEventListener('click',requestInstall);
+  $('installBannerDismiss').addEventListener('click',()=>{installBannerDismissed=true;syncInstallUI()});
+  $('closeInstallGuide').addEventListener('click',closeInstallGuide);
+  $('installGuideDone').addEventListener('click',closeInstallGuide);
+  $('installGuide').addEventListener('click',e=>{if(e.target===$('installGuide'))closeInstallGuide()});
   $('fileInput').addEventListener('change',async e=>{
     const file=e.target.files[0];if(!file)return;
     try{

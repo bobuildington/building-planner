@@ -97,6 +97,27 @@
         <div class="panel-footer"><div class="autosave-icon">✓</div><div><strong>Automatic saving is on</strong><small>Plans are saved in this browser</small></div></div>
       </aside>
     </main>
+    <div class="install-banner hidden" id="installBanner" role="region" aria-label="Install HousePlan Studio">
+      <span class="install-banner-icon" aria-hidden="true">⌂</span>
+      <span class="install-banner-copy"><strong>Take HousePlan with you</strong><small>Install free · Works offline</small></span>
+      <button id="installBannerBtn" class="install-banner-button">Install</button>
+      <button id="installBannerDismiss" class="install-banner-dismiss" aria-label="Dismiss installation suggestion">×</button>
+    </div>
+  </div>
+  <div id="installGuide" class="install-guide hidden" role="dialog" aria-modal="true" aria-labelledby="installGuideTitle">
+    <div class="install-guide-card">
+      <button id="closeInstallGuide" class="install-guide-close" aria-label="Close installation instructions">×</button>
+      <div class="install-guide-icon" aria-hidden="true">⌂</div>
+      <h2 id="installGuideTitle">Install HousePlan on your phone</h2>
+      <p>You can add the full planner to your home screen without using an app store.</p>
+      <ol>
+        <li>Open this website in <strong>Chrome on Android</strong>.</li>
+        <li>Tap the browser's <strong>⋮ menu</strong>.</li>
+        <li>Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>, then confirm.</li>
+      </ol>
+      <p class="install-guide-note">Once installed, open it from your app drawer. The editor works offline after its first successful download.</p>
+      <button id="installGuideDone" class="install-guide-done">Got it</button>
+    </div>
   </div>
   <input type="file" id="fileInput" accept=".json,application/json" hidden>
   <div id="toast" role="status" aria-live="polite"></div>

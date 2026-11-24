@@ -29,7 +29,7 @@ GitHub Pages on a free account requires a public repository. The source code is 
 ## Install on Android
 
 1. Open the published site in Chrome.
-2. Use Chrome's menu and choose **Install app** or **Add to Home screen**. You can also try **⋯ → Install on this phone** inside the editor.
+2. Tap the **Install** banner shown in the editor and confirm. If Chrome doesn't show an installation prompt, open Chrome's **⋮** menu and choose **Install app** or **Add to Home screen**. You can also use **⋯ → Install on this phone** in the editor.
 3. Open HousePlan from your phone's app launcher. The essential editor files are cached for offline use after initial installation.
 
 ## Back up your designs
