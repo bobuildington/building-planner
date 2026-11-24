@@ -1,4 +1,4 @@
-const CACHE_NAME='houseplan-studio-offline-v7';
+const CACHE_NAME='houseplan-studio-offline-v8';
 const APP_FILES=[
   './', './index.html', './styles.css', './mobile.css?v=vertical1', './app.js?v=vertical1',
   './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'
