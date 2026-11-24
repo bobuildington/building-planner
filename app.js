@@ -463,9 +463,20 @@
       const pts=points.map(p=>projectP(...p));
       polys.push({pts,fill,stroke,width,depth:pts.reduce((s,p)=>s+p.depth,0)/pts.length,kind});
     };
-    const surface=(x,y,w,h,z,fill)=>add([[x,y,z],[x+w,y,z],[x+w,y+h,z],[x,y+h,z]],fill,'#a2b7a6',.6,'floor');
+    const shade=(hex,factor)=>'#'+[1,3,5].map(i=>Math.round(parseInt(hex.slice(i,i+2),16)*factor).toString(16).padStart(2,'0')).join('');
+    // A complete solid has a top, bottom, and all four sides. Which sides are
+    // visible changes as the user orbits the model, so none can be omitted.
+    const cuboid=(corners,z,height,fill,stroke='#739586',kind='solid',width=.65)=>{
+      const bottom=corners.map(([x,y])=>[x,y,z]);
+      const top=corners.map(([x,y])=>[x,y,z+height]);
+      add([...bottom].reverse(),shade(fill,.68),stroke,width,kind);
+      [0.81,.90,.73,.86].forEach((factor,i)=>{
+        const next=(i+1)%4;
+        add([bottom[i],bottom[next],top[next],top[i]],shade(fill,factor),stroke,width,kind);
+      });
+      add(top,fill,stroke,width,kind);
+    };
     const vertical=(a,b,z,height,fill)=>{
-      const px=projectP(a[0],a[1],z),qx=projectP(b[0],b[1],z);
       add([[...a,z],[...b,z],[...b,z+height],[...a,z+height]],fill,'#729284',.65,'wall');
     };
     const palette=['#e4f0e3','#e8eee2','#e4edf0','#eee9e0','#eff0e4','#e6efe7','#e5edf1'];
@@ -474,33 +485,38 @@
       f.items.forEach((e,k)=>{
         if(e.type==='room'){
           const {x,y,w,h}=e;
-          surface(x,y,w,h,z+.1,palette[k%palette.length]);
+          // Slabs follow the actual room footprint, not the bounding box of
+          // every floor. An added room must never create dangling edge lines.
+          cuboid([[x,y],[x+w,y],[x+w,y+h],[x,y+h]],z-.25,.35,palette[k%palette.length],'#9db3a3','floor',.45);
           // Slightly translucent wall faces preserve interior visibility.
           vertical([x,y],[x+w,y],z,8,'rgba(173,200,183,.61)');
           vertical([x+w,y],[x+w,y+h],z,8,'rgba(125,162,143,.58)');
           vertical([x+w,y+h],[x,y+h],z,8,'rgba(140,180,158,.54)');
           vertical([x,y+h],[x,y],z,8,'rgba(189,211,194,.57)');
-          add([[x,y,z+8],[x+w,y,z+8],[x+w,y+.38,z+8],[x,y+.38,z+8]],'#779e86','#618772',.5,'top');
-          add([[x,y,z+8],[x+.38,y,z+8],[x+.38,y+h,z+8],[x,y+h,z+8]],'#779e86','#618772',.5,'top');
+          const cap=Math.min(.38,w/3,h/3);
+          add([[x,y,z+8],[x+w,y,z+8],[x+w,y+cap,z+8],[x,y+cap,z+8]],'#779e86','#618772',.5,'top');
+          add([[x+w-cap,y,z+8],[x+w,y,z+8],[x+w,y+h,z+8],[x+w-cap,y+h,z+8]],'#779e86','#618772',.5,'top');
+          add([[x,y+h-cap,z+8],[x+w,y+h-cap,z+8],[x+w,y+h,z+8],[x,y+h,z+8]],'#779e86','#618772',.5,'top');
+          add([[x,y,z+8],[x+cap,y,z+8],[x+cap,y+h,z+8],[x,y+h,z+8]],'#779e86','#618772',.5,'top');
         }else if(e.type==='wall'){
           vertical([e.x1,e.y1],[e.x2,e.y2],z,8,'rgba(137,173,152,.75)');
         }else if(e.type==='furniture'){
           const hz=e.subType==='plant'?2.7:e.subType==='bed'||e.subType==='sofa'?2:2.8;
           const topColor=e.subType==='plant'?'#719b71':e.subType==='table'||e.subType==='desk'?'#cfae88':e.subType==='bed'?'#eff5e9':'#a2bda7';
           const {x,y,w,h}=e;
-          add([[x,y,z+hz],[x+w,y,z+hz],[x+w,y+h,z+hz],[x,y+h,z+hz]],topColor,'#6e9680',.65,'furniture');
-          vertical([x,y+h],[x+w,y+h],z+.1,hz,topColor);
-          vertical([x+w,y],[x+w,y+h],z+.1,hz,'#a3afa0');
+          const angle=(e.rotation||0)*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle);
+          const mx=x+w/2,my=y+h/2;
+          const corners=[[x,y],[x+w,y],[x+w,y+h],[x,y+h]].map(([px,py])=>{
+            const dx=px-mx,dy=py-my;
+            return [mx+dx*c-dy*s,my+dx*s+dy*c];
+          });
+          cuboid(corners,z+.1,hz,topColor,'#6e9680','furniture');
         }else if(e.type==='window'||e.type==='door'){
           const a=(e.angle||0)*Math.PI/180,dx=Math.cos(a)*e.width/2,dy=Math.sin(a)*e.width/2;
           const z0=z+(e.type==='window'?3:0),z1=z+(e.type==='window'?6.5:6.8);
           add([[e.x-dx,e.y-dy,z0],[e.x+dx,e.y+dy,z0],[e.x+dx,e.y+dy,z1],[e.x-dx,e.y-dy,z1]],e.type==='window'?'rgba(127,194,203,.91)':'rgba(219,186,144,.85)',e.type==='window'?'#398e9d':'#9f784e',1.2,'opening');
         }
       });
-      // Slab edges mark the stacked level even when rooms are open.
-      if(f.items.some(e=>e.type==='room')){
-        add([[ext.minX-.35,ext.maxY+.35,z-.35],[ext.maxX+.35,ext.maxY+.35,z-.35],[ext.maxX+.35,ext.maxY+.35,z+.12],[ext.minX-.35,ext.maxY+.35,z+.12]],'#adbeb1','#799683',.6,'slab');
-      }
     });
     if(showRoof&&showAll){
       const x=ext.minX-.8,y=ext.minY-.8,w=ext.maxX-ext.minX+1.6,h=ext.maxY-ext.minY+1.6,z=(project.floors.length-1)*floorSpacing+9;
