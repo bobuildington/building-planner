@@ -12,7 +12,7 @@
   <meta name="description" content="Create and edit beautiful, measurable home floor plans in your browser.">
   <title>HousePlan Studio — Floor Plan Editor</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="mobile.css?v=update2a">
+  <link rel="stylesheet" href="mobile.css?v=update3">
 </head>
 <body>
   <div class="app-shell">
@@ -94,7 +94,13 @@
           <div class="canvas-hint" id="canvasHint">Click an object to edit its dimensions</div>
           <div class="zoom-controls"><button id="zoomOut" aria-label="Zoom out">−</button><span id="zoomText">100%</span><button id="zoomIn" aria-label="Zoom in">+</button><button id="fitBtn" class="fit-btn" title="Fit drawing to view" aria-label="Fit drawing">⛶</button></div>
           <div class="scale-key"><span class="scale-line"></span><span id="scaleLabel">5 ft</span></div>
-          <div class="three-d-stage hidden" id="threeDStage"><canvas id="modelCanvas" aria-label="Interactive rotatable three-dimensional building model"></canvas><div class="three-d-help">Drag to rotate · Scroll to zoom</div><div class="three-d-controls"><label><input type="checkbox" id="showAllFloors" checked> Show all floors</label><label><input type="checkbox" id="separateFloors"> Separate levels</label><button id="reset3D">Reset view</button></div><div class="model-floor-list" id="modelFloorList"></div></div>
+          <div class="three-d-stage hidden" id="threeDStage">
+            <canvas id="modelCanvas" aria-label="Interactive three-dimensional building model and walkthrough"></canvas>
+            <div class="three-d-help">Drag to rotate · Scroll to zoom</div>
+            <div class="three-d-controls" id="orbitControls"><label><input type="checkbox" id="showAllFloors" checked> Show all floors</label><label><input type="checkbox" id="separateFloors"> Separate levels</label><button id="reset3D">Reset view</button><button id="enterWalk" class="walk-switch">⇢ Walk inside</button></div>
+            <div class="walk-toolbar hidden" id="walkToolbar" aria-label="Walkthrough controls"><div class="walk-heading"><strong>Inside the building</strong><button type="button" id="exitWalk">✕ Exit walk</button></div><label>Explore floor <select id="walkFloor" aria-label="Walkthrough floor"></select></label><div class="walk-pad"><button type="button" data-walk="left" aria-label="Turn left">↶</button><button type="button" data-walk="forward" aria-label="Move forward">↑</button><button type="button" data-walk="right" aria-label="Turn right">↷</button><button type="button" data-walk="back" aria-label="Move backward">↓</button></div><small>Drag the scene to look around. Use arrows or W A S D on a keyboard.</small></div>
+            <div class="model-floor-list" id="modelFloorList"></div>
+          </div>
         </div>
         <div class="bottom-status"><div><span class="status-dot"></span><span id="statusMessage">Ready to design</span></div><span id="cursorPosition">X: — &nbsp; Y: —</span></div>
       </section>
@@ -112,10 +118,12 @@
       <div class="prefab-heading"><h2 id="prefabDialogTitle">Your prefab objects</h2><button id="closePrefabDialog" type="button" aria-label="Close prefab editor">×</button></div>
       <p>Create a reusable object with its own footprint. Prefabs are saved with this project.</p>
       <label for="prefabName">Object name<input id="prefabName" type="text" required maxlength="50" placeholder="e.g. Workshop bench"></label>
+      <div class="prefab-dimensions"><label for="prefabCategory">Category<select id="prefabCategory"><option>Furniture</option><option>Appliances</option><option>Fixtures</option><option>Structures</option><option>Decor</option></select></label><label for="prefabShape">3D shape<select id="prefabShape"><option value="box">Solid box</option><option value="table">Table</option><option value="shelf">Shelves</option><option value="cabinet">Cabinet</option><option value="cylinder">Cylinder</option></select></label></div>
       <div class="prefab-dimensions"><label for="prefabWidth">Width (ft)<input id="prefabWidth" type="number" required min="0.5" max="100" step="0.5" value="4"></label><label for="prefabDepth">Depth (ft)<input id="prefabDepth" type="number" required min="0.5" max="100" step="0.5" value="3"></label><label for="prefabHeight">Height (ft)<input id="prefabHeight" type="number" required min="0.5" max="30" step="0.5" value="3"></label></div>
       <label for="prefabColor">3D color<input id="prefabColor" type="color" value="#b5bfa7"></label>
+      <label for="prefabModel">Optional 3D model (.obj or uncompressed .glb)<input id="prefabModel" type="file" accept=".obj,.glb,model/gltf-binary,text/plain"></label><p id="prefabModelStatus" role="status">Models stay on this device with your project. Maximum 900 triangles; no textures.</p>
       <button class="prefab-save" type="submit">＋ Create prefab</button>
-      <div class="prefab-existing"><h3>Saved in this project</h3><div id="prefabList" class="prefab-list"></div></div>
+      <div class="prefab-existing"><h3>Saved in this project</h3><label for="prefabFilter">Filter saved objects<select id="prefabFilter"><option value="all">All categories</option><option>Furniture</option><option>Appliances</option><option>Fixtures</option><option>Structures</option><option>Decor</option></select></label><div id="prefabList" class="prefab-list"></div></div>
     </form>
   </div>
   <div class="projects-dialog hidden" id="projectsDialog" role="dialog" aria-modal="true" aria-labelledby="projectsTitle">
@@ -131,6 +139,7 @@
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="geometry.js?v=update2"></script>
   <script src="project-store.js?v=update1"></script>
-  <script src="app.js?v=update2b"></script>
+  <script src="mesh-import.js?v=update3"></script>
+  <script src="app.js?v=update3"></script>
 </body>
 </html>

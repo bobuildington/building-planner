@@ -18,7 +18,11 @@
 .prefab-card label { display:flex; flex-direction:column; gap:6px; color:#597365; font-weight:750; font-size:12px; }
 .prefab-card input { min-height:42px; padding:8px 10px; border-radius:8px; border:1px solid #dbe7dc; color:#28513e; background:#fbfdfb; font-size:16px; width:100%; }
 .prefab-card input[type="color"] { width:75px; padding:4px; }
+.prefab-card select { min-height:42px; width:100%; border:1px solid #dbe7dc; border-radius:8px; background:#fbfdfb; color:#28513e; padding:8px; font-size:15px; }
+.prefab-card input[type="file"] { font-size:12px; min-height:44px; padding:9px; }
 .prefab-dimensions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.prefab-dimensions:has(select) { grid-template-columns:repeat(2,minmax(0,1fr)); }
+#prefabModelStatus { color:#59816b; font-size:11px; }
 .prefab-save { min-height:44px; border:0; border-radius:9px; background:#245c47; color:#fff; font-weight:800; font-size:13px; }
 .prefab-existing { border-top:1px solid #e4ece5; margin-top:6px; padding-top:12px; }
 .prefab-existing h3 { margin:0 0 9px; color:#597866; font-size:12px; }
@@ -54,6 +58,23 @@
 .project-entry-actions button { min-height:34px; border:1px solid #d3e3d7; background:#fff; border-radius:7px; color:#356a4e; font-size:11px; font-weight:750; padding:5px 8px; }
 .project-entry-actions button[data-project-operation="open"] { background:#245c47; border-color:#245c47; color:#fff; }
 .project-entry-actions button[data-project-operation="delete"] { color:#b36a60; border-color:#f0d9d5; }
+.three-d-controls .walk-switch { border-color:#81b39a; background:#e1f3e8; color:#1e6949; font-weight:850; min-height:37px; }
+.walk-toolbar { position:absolute; z-index:7; left:12px; bottom:16px; width:min(310px,calc(100% - 24px)); background:#fffffff2; border:1px solid #c7ddcf; border-radius:16px; box-shadow:0 8px 25px #173c2a30; padding:12px; display:flex; flex-direction:column; gap:9px; color:#315e46; }
+.walk-toolbar.hidden { display:none; }
+.walk-heading { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:13px; }
+.walk-heading button { border:0; border-radius:8px; background:#eaf3ed; color:#2e6c4d; padding:8px; font-size:11px; font-weight:800; }
+.walk-toolbar label { display:flex; align-items:center; justify-content:space-between; gap:7px; font-size:12px; font-weight:750; }
+.walk-toolbar select { min-height:35px; padding:6px; border-radius:7px; border:1px solid #c6ddcc; color:#2a6848; background:white; max-width:63%; }
+.walk-pad { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+.walk-pad button { min-height:45px; background:#e5f3e9; border:1px solid #bddbc8; color:#276e4c; border-radius:9px; font-size:24px; font-weight:800; touch-action:manipulation; }
+.walk-pad button[data-walk="back"] { grid-column:2; grid-row:2; }
+.walk-pad button[data-walk="forward"] { grid-column:2; grid-row:1; }
+.walk-pad button[data-walk="left"] { grid-column:1; grid-row:1; }
+.walk-pad button[data-walk="right"] { grid-column:3; grid-row:1; }
+.walk-toolbar small { font-size:10px; line-height:1.4; color:#789385; }
+.three-d-stage.walking { background:#e5edeb; }
+.three-d-stage.walking .model-floor-list,.three-d-stage.walking .three-d-help { display:none; }
+.three-d-stage.walking #orbitControls { display:none; }
 
 @media (max-width: 840px) {
   :root { font-size: 14px; }
@@ -207,6 +228,10 @@
   .three-d-controls { left: 9px; top: 10px; padding: 12px 10px; gap: 10px; font-size: 11px; }
   .three-d-controls input { width: 17px; height: 17px; }
   .three-d-controls button { min-height: 30px; }
+  .three-d-controls .walk-switch { min-height:38px; }
+  .walk-toolbar { bottom:52px; left:8px; width:min(245px,calc(100% - 16px)); padding:9px; gap:7px; }
+  .walk-pad button { min-height:39px; }
+  .walk-toolbar small { display:none; }
   .model-floor-list { top: 10px; right: 8px; }
   .model-floor-tag { max-width: 121px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
   .floor-guides { top:7px; left:7px; gap:3px; max-width:calc(100% - 14px); }

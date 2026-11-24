@@ -12,8 +12,10 @@ A free, mobile-first, installable home floor-plan editor. Everything runs in you
 - Elevator shafts can extend through **all floors above** or just the **next floor** (choose in the elevator's Properties). Upper-floor 2D plans show non-editable shaft and stairwell opening guides.
 - Create, rename, duplicate, and switch between floors.
 - On upper floors, toggle a dashed blue outline of the floor below, magnetically **Align below**, or tap **Trace rooms** to copy missing room/wall outlines as editable elements. Trace never removes the existing layout and can be undone.
-- Create named prefab objects with custom width, depth, height, and color. Reuse them from the Objects palette; templates are included in editable JSON exports.
+- Create named prefab objects with categories, custom dimensions, colors, and procedural 3D shapes (box, table, shelf, cabinet, or cylinder). Optionally import a local **OBJ** or uncompressed **glTF 2.0 GLB** mesh. Models are included in JSON exports and backups.
+- Set a floor finish and wall finish on each room in the Properties inspector; the 2D floor colors and 3D room surfaces update together. For shared walls, the first connected room supplies the finish.
 - See all floors in an interactive 3D building model with thicker wall faces, framed wall openings, and connected vertical shafts. Rotate, zoom, separate levels, or isolate one floor.
+- Tap **Walk inside** in 3D to enter a first-person walkthrough. On phones, drag to look and use the directional arrows; on desktop use **W/A/S/D** or arrow keys. Switch the walkthrough floor in its menu, then select **Exit walk** to return to the building view.
 - Phone controls: bottom drawing toolbar, scrolling Objects palette, expandable properties sheet, larger touch handles, one-tap Edit / Copy / Rotate / Delete actions, two-finger pan/zoom, and 3D pinch zoom.
 - Create as many separate house projects as local storage allows. Open **Projects / My projects** to switch, duplicate, recover an earlier save, or delete a design. Importing a project creates a new saved copy.
 - Download an all-project JSON backup from **My projects → Back up all**. Restore it later without deleting existing projects.
@@ -45,6 +47,13 @@ GitHub Pages on a free account requires a public repository. The source code is 
 Each project is saved automatically in a separate browser-local document, with a recoverable earlier version when available. The app also requests persistent storage when you open the project library (the browser may decline). Clearing browser data, uninstalling the app, or using another device may still remove or isolate these files. Use **My projects → Back up all** regularly, and keep the downloaded JSON in a safe place. You can also export just one design using **Export → Editable project**.
 
 If you were using an earlier ChatGPT-hosted version, export a JSON backup there and import it here; browser storage does not transfer automatically between different website addresses.
+
+## Imported model compatibility
+
+- OBJ files use vertices (`v`) and polygon faces (`f`). GLB files must be uncompressed glTF 2.0 with embedded meshes, float position coordinates, and basic triangle indices. Scene-node transforms are supported; Draco/meshopt compression, texture maps, and external `.gltf` references are not supported.
+- Imported models are normalized to the dimensions you set in the prefab form. Use models under **1 MB**, **900 triangles**, and **3,000 vertices** to keep rendering usable on modest phones. Use a 3D modeling editor to decimate more detailed models.
+- A copy of the mesh is stored in each placed instance so removing a prefab from the library does not remove already-placed models. Large numbers of copies consume browser-local storage; export backups regularly.
+- Walkthrough is a visual preview with room-footprint movement limits, not a physically accurate game engine, collision simulation, or architectural safety check.
 
 ## Scope
 
