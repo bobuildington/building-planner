@@ -12,7 +12,7 @@
   <meta name="description" content="Create and edit beautiful, measurable home floor plans in your browser.">
   <title>HousePlan Studio — Floor Plan Editor</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="mobile.css?v=install2">
+  <link rel="stylesheet" href="mobile.css?v=pwa3">
 </head>
 <body>
   <div class="app-shell">
@@ -30,7 +30,7 @@
         <button id="importBtn" class="subtle-btn"><span class="icon-text">↥</span><span class="desktop-text">Open</span></button>
         <button id="projectMenuBtn" class="mobile-only mobile-menu-btn" aria-label="Project menu" aria-expanded="false">⋯</button>
         <button id="exportBtn" class="primary-btn">Export <span class="chevron">⌄</span></button>
-        <div id="projectMenu" class="export-menu hidden" role="menu"><button data-project-action="new">＋ New project</button><button data-project-action="open">↥ Open saved project</button><button data-project-action="overview">☷ Project overview</button><button data-project-action="install">⇩ Install on this phone</button></div>
+        <div id="projectMenu" class="export-menu hidden" role="menu"><button data-project-action="new">＋ New project</button><button data-project-action="open">↥ Open saved project</button><button data-project-action="overview">☷ Project overview</button></div>
         <div id="exportMenu" class="export-menu hidden" role="menu">
           <button data-export="png">Image <small>PNG</small></button>
           <button data-export="svg">Vector drawing <small>SVG</small></button>
@@ -97,30 +97,9 @@
         <div class="panel-footer"><div class="autosave-icon">✓</div><div><strong>Automatic saving is on</strong><small>Plans are saved in this browser</small></div></div>
       </aside>
     </main>
-    <div class="install-banner hidden" id="installBanner" role="region" aria-label="Install HousePlan Studio">
-      <span class="install-banner-icon" aria-hidden="true">⌂</span>
-      <span class="install-banner-copy"><strong>Take HousePlan with you</strong><small>Install free · Works offline</small></span>
-      <button id="installBannerBtn" class="install-banner-button">Install</button>
-      <button id="installBannerDismiss" class="install-banner-dismiss" aria-label="Dismiss installation suggestion">×</button>
-    </div>
-  </div>
-  <div id="installGuide" class="install-guide hidden" role="dialog" aria-modal="true" aria-labelledby="installGuideTitle">
-    <div class="install-guide-card">
-      <button id="closeInstallGuide" class="install-guide-close" aria-label="Close installation instructions">×</button>
-      <div class="install-guide-icon" aria-hidden="true">⌂</div>
-      <h2 id="installGuideTitle">Install HousePlan on your phone</h2>
-      <p>You can add the full planner to your home screen without using an app store.</p>
-      <ol>
-        <li>Open this website in <strong>Chrome on Android</strong>.</li>
-        <li>Tap the browser's <strong>⋮ menu</strong>.</li>
-        <li>Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>, then confirm.</li>
-      </ol>
-      <p class="install-guide-note">Once installed, open it from your app drawer. The editor works offline after its first successful download.</p>
-      <button id="installGuideDone" class="install-guide-done">Got it</button>
-    </div>
   </div>
   <input type="file" id="fileInput" accept=".json,application/json" hidden>
   <div id="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=install2"></script>
+  <script src="app.js?v=pwa3"></script>
 </body>
 </html>
